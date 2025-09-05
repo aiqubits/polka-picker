@@ -1,0 +1,290 @@
+import { useState } from 'react'
+import './App.css'
+
+// 简化的任务类型
+interface Task {
+  id: string
+  name: string
+  status: 'running' | 'idle' | 'error'
+  installed: string
+  runs: number
+  lastRun: string
+}
+
+// 模拟任务数据
+const mockTasks: Task[] = [
+  {
+    id: '1',
+    name: 'Data Automation Pipeline',
+    status: 'running',
+    installed: '240128',
+    runs: 128,
+    lastRun: '240301'
+  },
+  {
+    id: '2',
+    name: 'Customer Data Processing',
+    status: 'idle',
+    installed: '240205',
+    runs: 84,
+    lastRun: '240228'
+  },
+  {
+    id: '3',
+    name: 'Server Monitoring Agent',
+    status: 'running',
+    installed: '240112',
+    runs: 312,
+    lastRun: '240301'
+  },
+  {
+    id: '4',
+    name: 'Backup System Task',
+    status: 'error',
+    installed: '240220',
+    runs: 28,
+    lastRun: '240229'
+  },
+  {
+    id: '5',
+    name: 'File Conversion Service',
+    status: 'idle',
+    installed: '240125',
+    runs: 95,
+    lastRun: '240227'
+  },
+  {
+    id: '6',
+    name: 'API Integration Worker',
+    status: 'running',
+    installed: '240218',
+    runs: 43,
+    lastRun: '240301'
+  }
+]
+
+function App() {
+  const [tasks] = useState<Task[]>(mockTasks)
+  const [activeFilter, setActiveFilter] = useState<'all' | 'running' | 'idle' | 'error'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredTasks = tasks.filter(task => {
+    const matchesFilter = activeFilter === 'all' || task.status === activeFilter
+    const matchesSearch = task.name.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchesFilter && matchesSearch
+  })
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'running': return '#10b981'
+      case 'idle': return '#3b82f6'
+      case 'error': return '#ef4444'
+      default: return '#6b7280'
+    }
+  }
+
+  return (
+    <div className="app">
+      {/* Top Header */}
+      <div className="top-header">
+        <div className="header-left">
+          <div className="logo">
+            <span className="logo-text">OpenPick</span>
+          </div>
+          <nav className="nav-menu">
+            <button className="nav-item active">
+              <span className="nav-icon">🏠</span>
+              <span className="nav-text">Home</span>
+            </button>
+            <button className="nav-item">
+              <span className="nav-icon">🛒</span>
+              <span className="nav-text">Marketplace</span>
+            </button>
+            <button className="nav-item">
+              <span className="nav-icon">👤</span>
+              <span className="nav-text">Profile</span>
+            </button>
+          </nav>
+        </div>
+        <div className="header-right">
+          <div className="user-info">
+            <div className="user-avatar">De</div>
+            <div className="user-details">
+              <span className="username">Deporter</span>
+              <div className="user-stats">
+                <span className="free-badge">Free:10</span>
+                <span className="premium-badge">Premium:28</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="app-main">
+        {/* Sidebar */}
+        <div className="sidebar">
+        
+        <div className="post-section">
+          <div className="section-header">
+            <span className="section-icon">📝</span>
+            <span className="section-title">Post</span>
+          </div>
+          <div className="post-item">
+            <div className="post-meta">
+              <span className="post-id">240301</span>
+              <span className="post-action">Update</span>
+            </div>
+            <div className="post-title">New Features Release</div>
+            <div className="post-subtitle">Read more</div>
+          </div>
+        </div>
+
+        <div className="support-section">
+          <div className="section-header">
+            <span className="section-icon">🛠️</span>
+            <span className="section-title">Support</span>
+          </div>
+          <div className="qr-code">
+            <div className="qr-placeholder">QR</div>
+          </div>
+          <div className="support-contact">
+            <span className="contact-icon">📧</span>
+            <span className="contact-text">Contact Support</span>
+          </div>
+        </div>
+
+        </div>
+
+        {/* Main Content */}
+        <div className="main-content">
+        <div className="content-header">
+          <h1 className="page-title">My Tasks</h1>
+          <div className="header-controls">
+            <div className="filter-tabs">
+              {(['all', 'running', 'idle', 'error'] as const).map(filter => (
+                <button
+                  key={filter}
+                  className={`filter-tab ${activeFilter === filter ? 'active' : ''}`}
+                  onClick={() => setActiveFilter(filter)}
+                >
+                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div className="search-container">
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input"
+              />
+              <span className="search-icon">🔍</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="task-grid">
+          {filteredTasks.map(task => (
+            <div key={task.id} className="task-card" data-status={task.status}>
+              <div className="task-header">
+                <h3 className="task-name">{task.name}</h3>
+                <button className="task-menu">⋮</button>
+              </div>
+              
+              <div className="task-info">
+                <div className="info-row">
+                  <span className="info-icon">📅</span>
+                  <span className="info-label">Installed:</span>
+                  <span className="info-value">{task.installed}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-icon">▶️</span>
+                  <span className="info-label">Runs:</span>
+                  <span className="info-value">{task.runs}</span>
+                </div>
+              </div>
+
+              <div className="task-status">
+                <div className="status-indicator">
+                  <span 
+                    className="status-dot"
+                    style={{ color: getStatusColor(task.status) }}
+                  >
+                    ●
+                  </span>
+                  <span className="status-text" style={{ color: getStatusColor(task.status) }}>
+                    {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                  </span>
+                </div>
+                <div className="last-run">
+                  <span className="last-run-icon">🕒</span>
+                  <span className="last-run-label">Last:</span>
+                  <span className="last-run-value">{task.lastRun}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button className="add-button">
+          <span className="add-icon">+</span>
+        </button>
+        </div>
+      </div>
+
+      {/* Bottom Log Stream */}
+      <div className="log-stream">
+        <div className="log-header">Log Stream</div>
+        <div className="log-content">
+          <div className="log-entry success">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Starting task "Data Automation Pipeline"...</span>
+          </div>
+          <div className="log-entry info">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Loading configuration from data.config.json</span>
+          </div>
+          <div className="log-entry success">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Connecting to data source... Connected.</span>
+          </div>
+          <div className="log-entry info">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Processing batch #1 (250 records)</span>
+          </div>
+          <div className="log-entry info">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Processing batch #2 (250 records)</span>
+          </div>
+          <div className="log-entry info">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Processing batch #3 (250 records)</span>
+          </div>
+          <div className="log-entry success">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Processing complete. 750 records processed.</span>
+          </div>
+          <div className="log-entry info">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Generating summary report...</span>
+          </div>
+          <div className="log-entry success">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Summary report available at /reports/summary_240301_153042.json</span>
+          </div>
+          <div className="log-entry success">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Task completed successfully in 12.4 seconds.</span>
+          </div>
+          <div className="log-entry info">
+            <span className="log-prefix">&gt;</span>
+            <span className="log-message">Starting scheduled task "Server Monitoring Agent"</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default App
