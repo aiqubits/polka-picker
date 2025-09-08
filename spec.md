@@ -1,5 +1,29 @@
 # Windows 用户任务系统管控平台
 
+MVP 实现计划：
+
+tauri ui
+
+Home页 done
+
+tauri后端 todo
+
+1.local picker 数据封装
+
+2.remote 用户数据封装
+
+3.remote picker 数据封装
+
+contract todo 省略
+
+1.链上 picker 数据
+
+server todo
+
+1.remote 用户数据
+
+2.remote picker数据，校验链上hashtx
+
 ## 后端设计
 
 ### Runner 类型（任务类型）
@@ -39,7 +63,6 @@ webassembly 管控
 导航：从左至右，依次为主页，市场，用户信息。
 
 导航如下图：
-
 
 主页展示用户当前任务列表，任务安装日期 YYMMDD ，执行次数，任务状态，上一次执行日期 YYMMDD。
 

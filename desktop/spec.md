@@ -92,3 +92,18 @@ interface Task {
 
 您觉得这个计划如何？如果您同意这个方案，请toggle to Craft Mode，我将开始具体的代码实现工作。
 
+## src-tauri 后端设计
+
+本地数据库 sqlite3
+
+local_picker数据： 主uuid(与picker uuid一致，如果是本地导入则随机生成)，开发者邮箱，picker名称，安装时间，已运行次数，运行状态（Running Idle Error），最近一次运行的日期
+
+本地 picker 任务地址：
+
+C:\Users\username\.pickers\scripts\tintinland-run
+C:\Users\username\.pickers\python\tintinland-run
+C:\Users\username\.pickers\nodejs\tintinland-run
+
+用户模块封装，调用后端邮箱账户注册，钱包账户生成，用生成云端用户数据，提供tauri command接口给 UI
+
+市场Picker 商品模块，订单模块调用封装
