@@ -28,13 +28,13 @@ https://github.com/tauri-apps/tauri
 左侧边栏包含：
 
 顶部导航：OpenPick logo，Home、Marketplace、Profile 菜单
-用户信息：右上角显示用户头像和信息（Deporter, Free:10, Premium:28）
+用户信息：右上角显示用户头像和信息（Deporter, Wallet:10, Premium:28）
 Post 区域：显示更新和新闻
 Support 区域：包含二维码和联系支持信息
 底部日志流：显示实时任务执行日志
 主内容区域：
 
-My Tasks 标题和搜索/筛选功能（All, Running, Idle, Error状态筛选）
+My Pickers 标题和搜索/筛选功能（All, Running, Idle, Error状态筛选）
 任务卡片网格：6个任务卡片，每个显示：
 任务名称
 安装时间和运行次数
@@ -92,6 +92,16 @@ interface Task {
 
 ![](./home.jpg)
 
+## Chatbot 界面分析
+
+![](./chatbot.jpg)
+
+<!-- todo! -->
+
+## Chatbot 界面实现计划
+
+<!-- todo! -->
+
 ## Marketplace 界面分析
 
 ![](./marketplace.jpg)
@@ -116,7 +126,7 @@ interface Task {
 
 本地数据库 sqlite3
 
-local_picker数据： 主uuid(与picker uuid一致，如果是本地导入则随机生成)，开发者邮箱，picker名称，安装时间，已运行次数，运行状态（Running Idle Error），最近一次运行的日期
+local_pickers数据： 主uuid(与picker uuid一致，如果是本地导入则随机生成)，开发者邮箱（如果是本地导入，则是当前user id），picker名称，安装时间，已运行次数，最近一次运行状态（Running Idle Error），最近一次运行的日期
 
 本地 picker 任务地址：
 

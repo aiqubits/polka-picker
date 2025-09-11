@@ -55,7 +55,7 @@ pub struct Picker {
     pub description: String,
     pub price: i64,
     pub file_path: String,
-    pub download_count: i32,
+    pub download_count: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub image_path: String,

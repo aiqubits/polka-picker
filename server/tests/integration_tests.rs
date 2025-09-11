@@ -27,12 +27,17 @@ async fn create_test_app() -> Router {
         verification_codes: Arc::new(Mutex::new(HashMap::new())),
         download_tokens: Arc::new(Mutex::new(HashMap::new())),
         pending_registrations: Arc::new(Mutex::new(HashMap::new())),
+        blockchain_name: "Conflux".to_string(),
         blockchain_rpc_url: "https://evmtestnet.confluxrpc.com".to_string(),
         blockchain_token_usdt_url: "https://www.okx.com/api/v5/market/ticker?instId=USDC-USDT".to_string(),
         blockchain_authorized_contract_address: "0x2ed3dddae5b2f321af0806181fbfa6d049be47d8".to_string(),
         blockchain_retry_times: 5,
         blockchain_retry_interval_seconds: 10,
-        payment_rate: 5,
+        premium_payment_rate: 5,
+        premium_to_usd: 1,
+        premium_free: 30,
+        premium_period: 30,
+        premium_start: true,
     };
 
     create_routes().with_state(state)

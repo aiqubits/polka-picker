@@ -11,7 +11,7 @@ pub struct Config {
     pub password: PasswordConfig,
     pub pending_registration: PendingRegistrationConfig,
     pub blockchain: BlockchainConfig,
-    pub payment: PaymentConfig,
+    pub premium: PremiumConfig,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -33,6 +33,7 @@ pub struct PendingRegistrationConfig {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct BlockchainConfig {
+    pub name: String,
     pub rpc_url: String,
     pub token_usdt_url: String,
     pub authorized_contract_address: String,
@@ -41,8 +42,12 @@ pub struct BlockchainConfig {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct PaymentConfig {
-    pub rate: i8,
+pub struct PremiumConfig {
+    pub payment_rate: i64,
+    pub to_usd: i64,
+    pub free: i64,
+    pub period: i64,
+    pub start: bool,
 }
 
 impl Config {
@@ -86,13 +91,20 @@ pub struct AppState {
     pub password_salt: String,
     pub password_master_key: String,
     pub password_nonce: String,
+
+    pub premium_payment_rate: i64,
+    pub premium_free: i64,
+    pub premium_to_usd: i64,
+    pub premium_period: i64,
+    pub premium_start: bool,
+
     pub pending_registration_cleanup_minutes: i64,
+    pub blockchain_name: String,
     pub blockchain_rpc_url: String,
     pub blockchain_token_usdt_url: String,
     pub blockchain_authorized_contract_address: String,
     pub blockchain_retry_times: i8,
     pub blockchain_retry_interval_seconds: i8,
-    pub payment_rate: i8,
     pub verification_codes: Arc<Mutex<HashMap<String, VerificationCode>>>,
     pub download_tokens: Arc<Mutex<HashMap<String, DownloadToken>>>,
     pub pending_registrations: Arc<Mutex<HashMap<String, PendingRegistration>>>,
@@ -116,14 +128,19 @@ impl AppState {
                     cleanup_minutes: 10,
                 },
                 blockchain: BlockchainConfig {
-                    rpc_url: "https://eth-mainnet.g.alchemy.com/v2/your-api-key".to_string(),
+                    name: "eth".to_string(),
+                    rpc_url: "https://evmtestnet.confluxrpc.com".to_string(),
                     token_usdt_url: "https://www.okx.com/api/v5/market/ticker?instId=USDC-USDT".to_string(),
                     authorized_contract_address: "0x2ed3dddae5b2f321af0806181fbfa6d049be47d8".to_string(),
                     retry_times: 5,
                     retry_interval_seconds: 10,
                 },
-                payment: PaymentConfig {
-                    rate: 5,
+                premium: PremiumConfig {
+                    payment_rate: 5,
+                    to_usd: 1,
+                    free: 30,
+                    period: 30,
+                    start: true,
                 },
             }
         });
@@ -135,12 +152,17 @@ impl AppState {
             password_master_key: config.password.master_key,
             password_nonce: config.password.nonce,
             pending_registration_cleanup_minutes: config.pending_registration.cleanup_minutes,
+            blockchain_name: config.blockchain.name,
             blockchain_rpc_url: config.blockchain.rpc_url,
             blockchain_token_usdt_url: config.blockchain.token_usdt_url,
             blockchain_authorized_contract_address: config.blockchain.authorized_contract_address,
             blockchain_retry_times: config.blockchain.retry_times,
             blockchain_retry_interval_seconds: config.blockchain.retry_interval_seconds,
-            payment_rate: config.payment.rate,
+            premium_payment_rate: config.premium.payment_rate,
+            premium_to_usd: config.premium.payment_rate,
+            premium_free: config.premium.free,
+            premium_period: config.premium.period,
+            premium_start: config.premium.start,
             verification_codes: Arc::new(Mutex::new(HashMap::new())),
             download_tokens: Arc::new(Mutex::new(HashMap::new())),
             pending_registrations: Arc::new(Mutex::new(HashMap::new())),

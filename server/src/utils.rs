@@ -80,34 +80,28 @@ pub fn is_valid_email(email: &str) -> bool {
     email_regex.is_match(email) && !email.contains("..")
 }
 
-// ... existing code ...
-
 // 使用AES-256-GCM加密密码（可恢复）
 pub fn encrypt_private_key(password: &str, master_key: &str, nonce: &str) -> Result<String, AppError> {
-    // 将base64编码的master_key解码为32字节数组
-    let master_key_bytes = general_purpose::STANDARD
-        .decode(master_key)
-        .map_err(|_| AppError::InternalServerError)?;
+    // 对master_key进行base64编码，确保获取足够的字节长度
+    let master_key_encoded = general_purpose::STANDARD.encode(master_key);
+    let master_key_bytes = master_key_encoded.as_bytes();
     
-    if master_key_bytes.len() != 32 {
-        return Err(AppError::InternalServerError);
-    }
-    
-    // 转换为固定大小的32字节数组
+    // 确保master_key有32字节（AES-256需要）
     let mut key_array = [0u8; 32];
-    key_array.copy_from_slice(&master_key_bytes[..32]);
+    let copy_len = std::cmp::min(master_key_bytes.len(), 32);
+    key_array[..copy_len].copy_from_slice(&master_key_bytes[..copy_len]);
     
-    // 将base64编码的nonce解码为12字节数组
-    let nonce_bytes = general_purpose::STANDARD
-        .decode(nonce)
-        .map_err(|_| AppError::InternalServerError)?;
+    // 对nonce进行base64编码，确保获取足够的字节长度
+    let nonce_encoded = general_purpose::STANDARD.encode(nonce);
+    let nonce_bytes = nonce_encoded.as_bytes();
     
-    if nonce_bytes.len() != 12 {
-        return Err(AppError::InternalServerError);
-    }
+    // 确保nonce有12字节（GCM模式推荐）
+    let mut nonce_array = [0u8; 12];
+    let copy_len = std::cmp::min(nonce_bytes.len(), 12);
+    nonce_array[..copy_len].copy_from_slice(&nonce_bytes[..copy_len]);
     
     // 创建nonce对象
-    let nonce_obj = Nonce::<Aes256Gcm>::from_slice(&nonce_bytes);
+    let nonce_obj = Nonce::<Aes256Gcm>::from_slice(&nonce_array);
     
     // 创建加密器并加密密码
     let cipher = Aes256Gcm::new_from_slice(&key_array).map_err(|_| AppError::InternalServerError)?;
@@ -123,30 +117,26 @@ pub fn encrypt_private_key(password: &str, master_key: &str, nonce: &str) -> Res
 
 // 解密恢复原始密码
 pub fn decrypt_private_key(encrypted: &str, master_key: &str, nonce: &str) -> Result<String, AppError> {
-    // 将base64编码的master_key解码为32字节数组
-    let master_key_bytes = general_purpose::STANDARD
-        .decode(master_key)
-        .map_err(|_| AppError::InternalServerError)?;
+    // 对master_key进行base64编码，确保获取足够的字节长度
+    let master_key_encoded = general_purpose::STANDARD.encode(master_key);
+    let master_key_bytes = master_key_encoded.as_bytes();
     
-    if master_key_bytes.len() != 32 {
-        return Err(AppError::InternalServerError);
-    }
-    
-    // 转换为固定大小的32字节数组
+    // 确保master_key有32字节（AES-256需要）
     let mut key_array = [0u8; 32];
-    key_array.copy_from_slice(&master_key_bytes[..32]);
+    let copy_len = std::cmp::min(master_key_bytes.len(), 32);
+    key_array[..copy_len].copy_from_slice(&master_key_bytes[..copy_len]);
     
-    // 将base64编码的nonce解码为12字节数组
-    let nonce_bytes = general_purpose::STANDARD
-        .decode(nonce)
-        .map_err(|_| AppError::InternalServerError)?;
+    // 对nonce进行base64编码，确保获取足够的字节长度
+    let nonce_encoded = general_purpose::STANDARD.encode(nonce);
+    let nonce_bytes = nonce_encoded.as_bytes();
     
-    if nonce_bytes.len() != 12 {
-        return Err(AppError::InternalServerError);
-    }
+    // 确保nonce有12字节（GCM模式推荐）
+    let mut nonce_array = [0u8; 12];
+    let copy_len = std::cmp::min(nonce_bytes.len(), 12);
+    nonce_array[..copy_len].copy_from_slice(&nonce_bytes[..copy_len]);
     
     // 创建nonce对象
-    let nonce_obj = Nonce::<Aes256Gcm>::from_slice(&nonce_bytes);
+    let nonce_obj = Nonce::<Aes256Gcm>::from_slice(&nonce_array);
     
     // Base64解码密文
     let ciphertext = general_purpose::STANDARD

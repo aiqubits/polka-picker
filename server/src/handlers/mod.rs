@@ -40,6 +40,7 @@ pub fn create_routes() -> Router<AppState> {
         // 健康检查
         .route("/", get(health_check))
         // 用户相关路由（公开）
+        .route("/api/users/system_info", get(get_system_info))
         .route("/api/users/register", post(register))
         .route("/api/users/verify", post(verify))
         .route("/api/users/login", post(login))

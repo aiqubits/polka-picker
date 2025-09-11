@@ -1,16 +1,52 @@
-use sqlx::{sqlite::SqlitePool, Pool, Sqlite};
+use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 use tracing::info;
+use uuid::Uuid;
+use chrono::Utc;
+use crate::utils::{hash_password_with_user_id, generate_wallet};
+use std::fs;
+use url::Url;
 
 pub type DbPool = Pool<Sqlite>;
 
+// 使用内存数据库
+// pub async fn create_pool() -> Result<DbPool, sqlx::Error> {
+//     let pool = SqlitePoolOptions::new()
+//         .max_connections(5)
+//         .connect("sqlite::memory:")
+//         .await?;
+//     info!("Connected to in-memory database");
+//     Ok(pool)
+// }
+
+// 使用文件数据库
 pub async fn create_pool() -> Result<DbPool, sqlx::Error> {
-    // 使用内存数据库进行测试
-    let database_url = "sqlite::memory:";
-    
+    // 获取当前工作目录
+    let current_dir = std::env::current_dir().expect("Failed to get current directory");
+    // 构建data目录的绝对路径
+    let data_dir = current_dir.join("data");
+    // 创建data目录
+    fs::create_dir_all(&data_dir).expect("Failed to create data directory");
+
+    // 连接数据库，如果文件不存在会自动创建
+    let database_path = data_dir.join("pickers-server.db");
+    // Windows上需要 把 \ 替换成 /
+    let url = Url::from_file_path(&database_path)
+        .expect("Failed to convert path to URL");
+
+    // 转换为 sqlite:// 格式
+    let mut database_url = url.to_string().replace("file:///", "sqlite:///");
+    database_url.push_str("?mode=rwc");
+
+    println!("Database URL: {}", database_url);
+
+    // 创建连接池
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5) // 设置连接池大小
+        .connect(&database_url)
+        .await?;
     info!("Connecting to database: {}", database_url);
     
-    // 创建连接池
-    let pool = SqlitePool::connect(database_url).await?;
+    // let pool = SqlitePool::connect(database_url).await?;
     
     Ok(pool)
 }
@@ -110,12 +146,127 @@ pub async fn init_database(pool: &DbPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
 
+    insert_test_data(pool).await?;
+    Ok(())
+}
+
+/// 插入测试数据到数据库，默认执行，自动被调用
+pub async fn insert_test_data(pool: &DbPool) -> Result<(), sqlx::Error> {
+    info!("Inserting test data...");
+
+    // 使用固定的UUID以确保幂等性
+    let test_user_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+    let test_picker_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
+    let test_order_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap();
+    
+    // 配置信息（使用默认值）
+    let salt = "openpick";
+    let master_key: &'static str = "b3BlbnBpY2tvcGVucGlja29wZW5waWNrb3BlbnBpY2s="; // base64编码的"openpickopenpickopenpickopenpick"
+    let nonce = "b3BlbnBpY2tvcGVu"; // base64编码的"openpickopen"
+    
+    // 1. 创建测试用户
+    let test_email = "testdata@openpick.org";
+    let test_password = "testpassword";
+    let test_user_name = "Test Data User";
+    
+    // 哈希密码
+    let hashed_password = hash_password_with_user_id(test_password, test_user_id, salt);
+    
+    // 生成钱包
+    let (private_key, wallet_address) = generate_wallet(master_key, nonce);
+    
+    let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    
+    // 插入测试用户
+    sqlx::query(
+        r#"
+        INSERT OR IGNORE INTO users (
+            user_id, email, user_name, user_password, user_type, 
+            private_key, wallet_address, premium_balance, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(test_user_id)
+    .bind(test_email)
+    .bind(test_user_name)
+    .bind(hashed_password)
+    .bind("dev") // 设置为开发者类型，可以创建picker
+    .bind(private_key)
+    .bind(&wallet_address)
+    .bind(0) // premium_balance
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    info!("Inserted test user: {} ({})", test_user_name, test_email);
+
+    // 2. 创建测试Picker
+    let test_picker_alias = "testpicker";
+    let test_picker_description = "testpicker description";
+    let test_picker_price = 100; // 示例价格
+    
+    // 插入测试Picker
+    sqlx::query(
+        r#"
+        INSERT OR IGNORE INTO pickers (
+            picker_id, dev_user_id, alias, description, price, 
+            image_path, file_path, version, status, download_count, 
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(test_picker_id)
+    .bind(test_user_id)
+    .bind(test_picker_alias)
+    .bind(test_picker_description)
+    .bind(test_picker_price)
+    .bind("test_image.jpg") // 示例图片路径
+    .bind("test_picker.zip") // 示例文件路径
+    .bind("1.0.0") // 版本号
+    .bind("active") // 状态
+    .bind(0) // download_count
+    .bind(&now)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    info!("Inserted test picker: {} - {}", test_picker_alias, test_picker_description);
+
+    // 3. 创建测试订单
+    // 插入测试订单
+    sqlx::query(
+        r#"
+        INSERT OR IGNORE INTO orders (
+            order_id, status, user_id, picker_id, pay_type, 
+            amount, tx_hash, created_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(test_order_id)
+    .bind("pending") // 订单状态
+    .bind(test_user_id)
+    .bind(test_picker_id)
+    .bind("wallet") // 支付方式
+    .bind(test_picker_price) // 金额
+    .bind(Option::<String>::None) // tx_hash (暂时为空)
+    .bind(&now)
+    .bind(Option::<String>::None) // expires_at (暂时为空)
+    .execute(pool)
+    .await?;
+
+    info!("Inserted test order: {} (wallet payment, pending)", test_order_id);
+
+    info!("Test data insertion completed successfully!");
+    info!("Test user credentials - Email: {}, Password: {}", test_email, test_password);
+    info!("Test user wallet address: {}", wallet_address);
+
     Ok(())
 }
 
 #[cfg(test)]
     mod tests {
         use crate::models::OrderStatus;
+        use crate::utils::verify_password_with_user_id;
         use super::*;
         use serial_test::serial;
         use sqlx::Row;
@@ -321,6 +472,103 @@ pub async fn init_database(pool: &DbPool) -> Result<(), sqlx::Error> {
         let pool = create_pool().await.expect("Failed to create pool");
         let result = init_database(&pool).await;
         assert!(result.is_ok(), "Failed to initialize database");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_insert_test_data() {
+        let pool = create_pool().await.expect("Failed to create pool");
+        init_database(&pool).await.expect("Failed to init database");
+        
+        // 手动插入测试数据
+        insert_test_data(&pool).await.expect("Failed to insert test data");
+
+        // 验证测试用户数据
+        let user_row = sqlx::query("SELECT * FROM users WHERE email = ?")
+            .bind("testdata@openpick.org")
+            .fetch_one(&pool)
+            .await
+            .expect("Failed to fetch test user");
+        
+        let user_id: Vec<u8> = user_row.get("user_id");
+        let user_id_uuid = Uuid::from_slice(&user_id).expect("Invalid user UUID");
+        let email: String = user_row.get("email");
+        let user_name: String = user_row.get("user_name");
+        let user_password: String = user_row.get("user_password");
+        let user_type: String = user_row.get("user_type");
+        let wallet_address: String = user_row.get("wallet_address");
+        let premium_balance: i64 = user_row.get("premium_balance");
+        
+        assert_eq!(email, "testdata@openpick.org");
+        assert_eq!(user_name, "Test Data User");
+        assert_eq!(user_type, "dev");
+        assert_eq!(premium_balance, 0);
+        assert!(wallet_address.starts_with("0x"));
+        assert_eq!(wallet_address.len(), 42);
+        
+        // 验证密码哈希
+        let salt = "openpick";
+        let is_password_valid = verify_password_with_user_id("testpassword", user_id_uuid, &user_password, salt);
+        assert!(is_password_valid, "Password verification failed");
+
+        // 验证测试Picker数据
+        let picker_row = sqlx::query("SELECT * FROM pickers WHERE alias = ?")
+            .bind("testpicker")
+            .fetch_one(&pool)
+            .await
+            .expect("Failed to fetch test picker");
+        
+        let picker_id: Vec<u8> = picker_row.get("picker_id");
+        let picker_id_uuid = Uuid::from_slice(&picker_id).expect("Invalid picker UUID");
+        let dev_user_id: Vec<u8> = picker_row.get("dev_user_id");
+        let dev_user_id_uuid = Uuid::from_slice(&dev_user_id).expect("Invalid dev user UUID");
+        let alias: String = picker_row.get("alias");
+        let description: String = picker_row.get("description");
+        let price: i64 = picker_row.get("price");
+        let status: String = picker_row.get("status");
+        let download_count: i64 = picker_row.get("download_count");
+        
+        assert_eq!(alias, "testpicker");
+        assert_eq!(description, "testpicker description");
+        assert_eq!(price, 100);
+        assert_eq!(status, "active");
+        assert_eq!(download_count, 0);
+        assert_eq!(dev_user_id_uuid, user_id_uuid, "Picker should be owned by test user");
+
+        // 验证测试订单数据
+        let order_row = sqlx::query("SELECT * FROM orders WHERE user_id = ? AND picker_id = ?")
+            .bind(&user_id)
+            .bind(&picker_id)
+            .fetch_one(&pool)
+            .await
+            .expect("Failed to fetch test order");
+        
+        let order_id: Vec<u8> = order_row.get("order_id");
+        let order_id_uuid = Uuid::from_slice(&order_id).expect("Invalid order UUID");
+        let order_status: String = order_row.get("status");
+        let pay_type: String = order_row.get("pay_type");
+        let amount: i64 = order_row.get("amount");
+        let tx_hash: Option<String> = order_row.get("tx_hash");
+        
+        assert_eq!(order_status, "pending");
+        assert_eq!(pay_type, "wallet");
+        assert_eq!(amount, price, "Order amount should match picker price");
+        assert!(tx_hash.is_none(), "tx_hash should be None for pending order");
+
+        // 验证外键关系
+        let order_user_id: Vec<u8> = order_row.get("user_id");
+        let order_picker_id: Vec<u8> = order_row.get("picker_id");
+        let order_user_id_uuid = Uuid::from_slice(&order_user_id).expect("Invalid order user UUID");
+        let order_picker_id_uuid = Uuid::from_slice(&order_picker_id).expect("Invalid order picker UUID");
+        
+        assert_eq!(order_user_id_uuid, user_id_uuid, "Order should belong to test user");
+        assert_eq!(order_picker_id_uuid, picker_id_uuid, "Order should reference test picker");
+
+        println!("✅ 测试数据验证成功!");
+        println!("📧 测试用户: {} ({})", user_name, email);
+        println!("💰 钱包地址: {}", wallet_address);
+        println!("📦 测试Picker: {} - {}", alias, description);
+        println!("🛒 测试订单: {} ({} 支付, {} 状态)", order_id_uuid, pay_type, order_status);
     }
 
     #[tokio::test]

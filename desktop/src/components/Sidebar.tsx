@@ -45,16 +45,16 @@ const Sidebar = () => {
             👤 Profile
           </button>
         </nav>
-        <div className="user-info">
+        {/* <div className="user-info">
           <div className="user-avatar">De</div>
           <div className="user-details">
             <span className="username">Deporter</span>
             <div className="user-stats">
-              <span className="free-badge">Free:10</span>
+              <span className="wallet-badge">Wallet:10</span>
               <span className="premium-badge">Premium:28</span>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Post Section */}

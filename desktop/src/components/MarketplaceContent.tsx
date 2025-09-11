@@ -1,17 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ProductCard from './ProductCard'
 import type { Product, Category } from '../types'
+import { clientAPI } from '../client/api'
 import './MarketplaceContent.css'
 
-interface MarketplaceContentProps {
-  products: Product[]
-}
-
-const MarketplaceContent = ({ products }: MarketplaceContentProps) => {
+const MarketplaceContent = () => {
   const [activeCategory, setActiveCategory] = useState<Category>('All')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [products, setProducts] = useState<Product[]>([])
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const categories: Category[] = ['All', 'Popular', 'New', 'Premium', 'Tools']
+  // 从API获取产品数据
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const productsData = await clientAPI.getPickerMarketplace
+        if (Array.isArray(productsData)) {
+          setProducts(productsData as Product[])
+        } else {
+          setError('Invalid product data received. Please try again later.')
+        }
+      } catch (err) {
+        console.error('Failed to fetch products:', err)
+        setError('Failed to load products. Please try again later.')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProducts()
+  }, [])
+
+  const categories: Category[] = ['All', 'Popular', 'New', 'Premium']
 
   const filteredProducts = products.filter(product => {
     const matchesCategory = activeCategory === 'All' || product.category === activeCategory
@@ -24,7 +47,7 @@ const MarketplaceContent = ({ products }: MarketplaceContentProps) => {
     <div className="marketplace-content">
       {/* Header */}
       <div className="content-header">
-        <h1 className="page-title">Marketplace</h1>
+        {/* <h1 className="page-title">Marketplace</h1> */}
         <div className="header-controls">
           <div className="category-tabs">
             {categories.map(category => (
@@ -51,11 +74,25 @@ const MarketplaceContent = ({ products }: MarketplaceContentProps) => {
       </div>
 
       {/* Product Grid */}
-      <div className="product-grid">
-        {filteredProducts.map(product => (
-          <ProductCard key={product.id} product={product} />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading products...</p>
+        </div>
+      ) : error ? (
+        <div className="error-container">
+          <p>{error}</p>
+          <button className="retry-button" onClick={() => window.location.reload()}>Retry</button>
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="no-products">No products found</div>
+      ) : (
+        <div className="product-grid">
+          {filteredProducts.map(product => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      )}
 
       {/* Pagination */}
       <div className="pagination">

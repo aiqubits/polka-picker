@@ -85,6 +85,45 @@ impl From<User> for UserInfo {
     }
 }
 
+// 系统信息响应
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SystemInfoResponse {
+    pub chain_name: String,
+    pub chain_url: String,
+    pub premium_payment_rate: i64,
+    pub premium_to_usd: i64,
+    pub premium_free: i64,
+    pub premium_period: i64,
+    pub premium_start: bool,
+}
+
+// 获取系统信息
+#[utoipa::path(
+    get,
+    path = "/api/users/system_info",
+    tag = "users",
+    summary = "获取系统信息",
+    description = "获取当前系统的信息",
+    responses(
+        (status = 200, description = "系统信息获取成功", body = SystemInfoResponse),
+        (status = 500, description = "内部服务器错误", body = crate::openapi::ErrorResponse),
+    )
+)]
+pub async fn get_system_info(
+    State(state): State<AppState>,
+) -> Result<Json<SystemInfoResponse>, AppError> {
+    let system_info = SystemInfoResponse {
+        chain_name: state.blockchain_name,
+        chain_url: state.blockchain_rpc_url,
+        premium_payment_rate: state.premium_payment_rate,
+        premium_to_usd: state.premium_to_usd,
+        premium_free: state.premium_free,
+        premium_period: state.premium_period,
+        premium_start: state.premium_start,
+    };
+    Ok(Json(system_info))
+}
+
 // 用户注册
 #[utoipa::path(
     post,
@@ -95,7 +134,7 @@ impl From<User> for UserInfo {
     request_body = RegisterRequest,
     responses(
         (status = 200, description = "注册成功", body = RegisterResponse),
-        (status = 400, description = "请求参数错误", body = crate::openapi::ErrorResponse),
+        (status = 400, description = "请求参数错误123321", body = crate::openapi::ErrorResponse),
         (status = 422, description = "邮箱已被注册", body = crate::openapi::ErrorResponse)
     )
 )]
@@ -297,6 +336,7 @@ pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
+    info!("User Login Begin: {:?}", payload);
     // 检查用户是否存在
     let user = sqlx::query_as::<_, User>(
         "SELECT * FROM users WHERE email = ?",
@@ -321,7 +361,7 @@ pub async fn login(
         &EncodingKey::from_secret(state.jwt_secret.as_ref()),
     )
     .map_err(|_| AppError::InternalServerError)?;
-
+    info!("User Login Over: {:?}", user);
     Ok(Json(LoginResponse {
         token,
         user: user.into(),

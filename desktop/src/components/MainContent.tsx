@@ -33,7 +33,7 @@ const MainContent = ({
     <div className="main-content">
       {/* Header */}
       <div className="content-header">
-        <h1 className="page-title">My Tasks</h1>
+        {/* <h1 className="page-title">My Pickers</h1> */}
         <div className="header-controls">
           <div className="filter-tabs">
             {filterOptions.map(option => (
@@ -70,9 +70,9 @@ const MainContent = ({
       </div>
 
       {/* Add Button */}
-      <button className="add-button" title="Add new task">
+      {/* <button className="add-button" title="Add new task">
         <span className="add-icon">+</span>
-      </button>
+      </button> */}
     </div>
   )
 }

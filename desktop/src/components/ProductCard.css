@@ -87,7 +87,7 @@
   align-items: center;
 }
 
-.free-badge {
+.wallet-badge {
   background-color: var(--success);
   color: white;
   font-size: 11px;

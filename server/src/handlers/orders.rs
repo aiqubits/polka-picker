@@ -196,7 +196,7 @@ pub async fn create_order(
         }
     }
 
-    let pay_rate = (state.payment_rate as f32).div(100.00);
+    let pay_rate = (state.premium_payment_rate as f32).div(100.00);
     info!("PAYMENT RATE: {}", pay_rate);
 
     // 查找用户钱包地址

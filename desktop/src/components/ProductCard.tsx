@@ -43,7 +43,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
           {product.isPremium ? (
             <span className="premium-badge">Premium</span>
           ) : (
-            <span className="free-badge">Free</span>
+            <span className="wallet-badge">Wallet</span>
           )}
         </div>
         

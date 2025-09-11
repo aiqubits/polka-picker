@@ -174,7 +174,6 @@ const LogStream = () => {
               <div className="filter-dropdown">
                 <button className="filter-button">
                   <span className="filter-icon">🔍</span>
-                  筛选器
                 </button>
                 <div className="filter-dropdown-content">
                   <label className="filter-option">
@@ -183,7 +182,7 @@ const LogStream = () => {
                       checked={filters.error} 
                       onChange={() => toggleFilter('error')}
                     />
-                    显示错误
+                    ERROR
                   </label>
                   <label className="filter-option">
                     <input 
@@ -191,7 +190,7 @@ const LogStream = () => {
                       checked={filters.warning} 
                       onChange={() => toggleFilter('warning')}
                     />
-                    显示警告
+                    WARN
                   </label>
                   <label className="filter-option">
                     <input 
@@ -199,7 +198,7 @@ const LogStream = () => {
                       checked={filters.info} 
                       onChange={() => toggleFilter('info')}
                     />
-                    显示信息
+                    INFO
                   </label>
                 </div>
               </div>
@@ -210,28 +209,26 @@ const LogStream = () => {
               <button 
                 className="log-action-button copy-button" 
                 onClick={copyLogs}
-                title="复制日志"
+                title="Copy"
               >
                 <span className="action-icon">📋</span>
-                复制
               </button>
               
               <button 
                 className="log-action-button expand-button" 
                 onClick={toggleExpand}
-                title={isExpanded ? "恢复正常大小" : "全屏显示"}
+                title={isExpanded ? "Return To Normal" : "Full Screen"}
               >
                 <span className="action-icon">{isExpanded ? '⬇️' : '⬆️'}</span>
-                {isExpanded ? '恢复' : '展开'}
+                {/* {isExpanded ? 'Recovery' : 'Expand'} */}
               </button>
               
               <button 
                 className="log-action-button close-button" 
                 onClick={toggleMinimize}
-                title="关闭面板"
+                title="Close Panel"
               >
                 <span className="action-icon">✕</span>
-                关闭
               </button>
             </div>
           </div>

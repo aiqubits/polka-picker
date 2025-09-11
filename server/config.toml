@@ -14,15 +14,17 @@ cleanup_minutes = 10
 
 # 区块链配置
 [blockchain]
+name = "conflux"
 rpc_url = "https://evmtestnet.confluxrpc.com"
 token_usdt_url = "https://www.okx.com/api/v5/market/ticker?instId=CFX-USDT"
 authorized_contract_address = "0x2ed3dddae5b2f321af0806181fbfa6d049be47d8"
 retry_times = 5
 retry_interval_seconds = 10 
 
-# 支付设置
-[payment]
-rate = 5   # 5%
-premium_usd = 1 # 当前 1premium 等于 1u
-
-
+# Premium 积分设置
+[premium]
+payment_rate = 5   # 5%
+to_usd = 1         # 当前 1 premium 等于 1 u
+free = 30          # 免费积分数
+period = 30        # 免费周期
+start = true       # 是否循环启动
