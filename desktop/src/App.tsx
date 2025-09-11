@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import './App.css'
+import MarketplaceContent from './components/MarketplaceContent'
+import ProfileContent from './components/ProfileContent'
+import type { Product } from './types'
 
 // 简化的任务类型
 interface Task {
@@ -67,6 +70,77 @@ function App() {
   const [tasks] = useState<Task[]>(mockTasks)
   const [activeFilter, setActiveFilter] = useState<'all' | 'running' | 'idle' | 'error'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [activePage, setActivePage] = useState<'home' | 'marketplace' | 'profile'>('home')
+
+  // 模拟Marketplace产品数据
+  const mockProducts: Product[] = [
+    {
+      id: '1',
+      name: 'Data Processing Tool',
+      description: 'ETL tool. Transform, validate and load data with ease.',
+      category: 'Tools',
+      developer: 'DataTeam Inc.',
+      isPremium: true,
+      rating: { score: 4.5, count: 128 },
+      installs: 3450,
+      actionText: 'Get'
+    },
+    {
+      id: '2',
+      name: 'Server Monitoring',
+      description: 'Real-time server monitoring with alerts and detailed performance metrics.',
+      category: 'Popular',
+      developer: 'ServerPro Systems',
+      isPremium: false,
+      rating: { score: 4.8, count: 312 },
+      installs: 8250,
+      actionText: 'Install'
+    },
+    {
+      id: '3',
+      name: 'API Integration Helper',
+      description: 'Simplify API integrations with built-in connectors and templates for popular services.',
+      category: 'Tools',
+      developer: 'DevToolkit Labs',
+      isPremium: true,
+      rating: { score: 4.2, count: 89 },
+      installs: 1875,
+      actionText: 'Get'
+    },
+    {
+      id: '4',
+      name: 'Backup System Plugin',
+      description: 'Automated backup solution with encryption, versioning, and easy restore functionality.',
+      category: 'New',
+      developer: 'SecureData Systems',
+      isPremium: false,
+      rating: { score: 4.7, count: 56 },
+      installs: 2140,
+      actionText: 'Install'
+    },
+    {
+      id: '5',
+      name: 'File Conversion Service',
+      description: 'Convert between document formats with high-quality output and batch processing capabilities.',
+      category: 'Tools',
+      developer: 'FileTools Inc.',
+      isPremium: true,
+      rating: { score: 4.3, count: 147 },
+      installs: 4320,
+      actionText: 'Get'
+    },
+    {
+      id: '6',
+      name: 'AI Assistant Worker',
+      description: 'AI-powered assistant for task automation, data analysis and intelligent recommendations.',
+      category: 'Premium',
+      developer: 'Alnova Tech',
+      isPremium: true,
+      rating: { score: 4.6, count: 203 },
+      installs: 6790,
+      actionText: 'Get'
+    }
+  ]
 
   const filteredTasks = tasks.filter(task => {
     const matchesFilter = activeFilter === 'all' || task.status === activeFilter
@@ -92,15 +166,24 @@ function App() {
             <span className="logo-text">OpenPick</span>
           </div>
           <nav className="nav-menu">
-            <button className="nav-item active">
+            <button 
+              className={`nav-item ${activePage === 'home' ? 'active' : ''}`}
+              onClick={() => setActivePage('home')}
+            >
               <span className="nav-icon">🏠</span>
               <span className="nav-text">Home</span>
             </button>
-            <button className="nav-item">
+            <button 
+              className={`nav-item ${activePage === 'marketplace' ? 'active' : ''}`}
+              onClick={() => setActivePage('marketplace')}
+            >
               <span className="nav-icon">🛒</span>
               <span className="nav-text">Marketplace</span>
             </button>
-            <button className="nav-item">
+            <button 
+              className={`nav-item ${activePage === 'profile' ? 'active' : ''}`}
+              onClick={() => setActivePage('profile')}
+            >
               <span className="nav-icon">👤</span>
               <span className="nav-text">Profile</span>
             </button>
@@ -157,79 +240,87 @@ function App() {
 
         {/* Main Content */}
         <div className="main-content">
-        <div className="content-header">
-          <h1 className="page-title">My Tasks</h1>
-          <div className="header-controls">
-            <div className="filter-tabs">
-              {(['all', 'running', 'idle', 'error'] as const).map(filter => (
-                <button
-                  key={filter}
-                  className={`filter-tab ${activeFilter === filter ? 'active' : ''}`}
-                  onClick={() => setActiveFilter(filter)}
-                >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                </button>
-              ))}
-            </div>
-            <div className="search-container">
-              <input
-                type="text"
-                placeholder="Search tasks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input"
-              />
-              <span className="search-icon">🔍</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="task-grid">
-          {filteredTasks.map(task => (
-            <div key={task.id} className="task-card" data-status={task.status}>
-              <div className="task-header">
-                <h3 className="task-name">{task.name}</h3>
-                <button className="task-menu">⋮</button>
-              </div>
-              
-              <div className="task-info">
-                <div className="info-row">
-                  <span className="info-icon">📅</span>
-                  <span className="info-label">Installed:</span>
-                  <span className="info-value">{task.installed}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-icon">▶️</span>
-                  <span className="info-label">Runs:</span>
-                  <span className="info-value">{task.runs}</span>
+          {activePage === 'home' ? (
+            <>
+              <div className="content-header">
+                <h1 className="page-title">My Tasks</h1>
+                <div className="header-controls">
+                  <div className="filter-tabs">
+                    {(['all', 'running', 'idle', 'error'] as const).map(filter => (
+                      <button
+                        key={filter}
+                        className={`filter-tab ${activeFilter === filter ? 'active' : ''}`}
+                        onClick={() => setActiveFilter(filter)}
+                      >
+                        {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="search-container">
+                    <input
+                      type="text"
+                      placeholder="Search tasks..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
+                    <span className="search-icon">🔍</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="task-status">
-                <div className="status-indicator">
-                  <span 
-                    className="status-dot"
-                    style={{ color: getStatusColor(task.status) }}
-                  >
-                    ●
-                  </span>
-                  <span className="status-text" style={{ color: getStatusColor(task.status) }}>
-                    {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-                  </span>
-                </div>
-                <div className="last-run">
-                  <span className="last-run-icon">🕒</span>
-                  <span className="last-run-label">Last:</span>
-                  <span className="last-run-value">{task.lastRun}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              <div className="task-grid">
+                {filteredTasks.map(task => (
+                  <div key={task.id} className="task-card" data-status={task.status}>
+                    <div className="task-header">
+                      <h3 className="task-name">{task.name}</h3>
+                      <button className="task-menu">⋮</button>
+                    </div>
+                    
+                    <div className="task-info">
+                      <div className="info-row">
+                        <span className="info-icon">📅</span>
+                        <span className="info-label">Installed:</span>
+                        <span className="info-value">{task.installed}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-icon">▶️</span>
+                        <span className="info-label">Runs:</span>
+                        <span className="info-value">{task.runs}</span>
+                      </div>
+                    </div>
 
-        <button className="add-button">
-          <span className="add-icon">+</span>
-        </button>
+                    <div className="task-status">
+                      <div className="status-indicator">
+                        <span 
+                          className="status-dot"
+                          style={{ color: getStatusColor(task.status) }}
+                        >
+                          ●
+                        </span>
+                        <span className="status-text" style={{ color: getStatusColor(task.status) }}>
+                          {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                        </span>
+                      </div>
+                      <div className="last-run">
+                        <span className="last-run-icon">🕒</span>
+                        <span className="last-run-label">Last:</span>
+                        <span className="last-run-value">{task.lastRun}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button className="add-button">
+                <span className="add-icon">+</span>
+              </button>
+            </>
+          ) : activePage === 'marketplace' ? (
+            <MarketplaceContent products={mockProducts} />
+          ) : (
+            <ProfileContent />
+          )}
         </div>
       </div>
 

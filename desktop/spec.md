@@ -90,7 +90,27 @@ interface Task {
 左侧边栏的布局和间距
 这个实现计划将创建一个功能完整、视觉精美的任务管理界面，完全符合您提供的UI设计图要求。
 
-您觉得这个计划如何？如果您同意这个方案，请toggle to Craft Mode，我将开始具体的代码实现工作。
+![](./home.jpg)
+
+## Marketplace 界面分析
+
+![](./marketplace.jpg)
+
+<!-- todo! -->
+
+## Marketplace 界面实现计划
+
+<!-- todo! -->
+
+## Profile 界面分析
+
+![](./profile.jpg)
+
+<!-- todo! -->
+
+## Profile 界面实现计划
+
+<!-- todo! -->
 
 ## src-tauri 后端设计
 

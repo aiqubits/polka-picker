@@ -223,13 +223,24 @@ input::placeholder {
   border-bottom: 1px solid var(--border);
 }
 
-.section-header {
+/* 侧边栏标题样式 - 确保靠左对齐 */
+.post-section .section-header,
+.support-section .section-header {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
   font-weight: 600;
   color: var(--text-primary);
+  width: 100%;
+  justify-content: flex-start !important;
+}
+
+/* 确保图标和标题正确排列 */
+.post-section .section-header .section-title,
+.support-section .section-header .section-title {
+  margin: 0;
+  padding: 0;
 }
 
 .section-icon {
