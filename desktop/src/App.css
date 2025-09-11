@@ -685,7 +685,7 @@ input::placeholder {
   justify-content: center;
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
   transition: all 0.2s ease;
-  z-index: 10;
+  z-index: 1001;
 }
 
 .add-button:hover {

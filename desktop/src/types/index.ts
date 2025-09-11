@@ -63,3 +63,26 @@ export interface ProfileStats {
   walletBalance: number;
   premiumCredits: number;
 }
+
+// Chatbot interfaces
+export interface ChatMessage {
+  id: string;
+  content: string;
+  sender: 'user' | 'bot';
+  timestamp: string;
+  type?: 'text' | 'image' | 'button' | 'form';
+  buttons?: ChatButton[];
+}
+
+export interface ChatButton {
+  id: string;
+  text: string;
+  action: string;
+}
+
+export interface ChatbotSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  lastMessage?: string;
+}

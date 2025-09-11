@@ -1,0 +1,263 @@
+import { useState, useRef, useEffect } from 'react'
+import './LogStream.css'
+
+interface LogEntry {
+  id: string
+  message: string
+  type: 'success' | 'error' | 'warning' | 'info'
+}
+
+const LogStream = () => {
+  // 模拟日志数据
+  const [logs] = useState<LogEntry[]>([
+    {
+      id: '1',
+      message: 'Starting task "Data Automation Pipeline"...',
+      type: 'info'
+    },
+    {
+      id: '2',
+      message: 'Loading configuration from data.config.json',
+      type: 'info'
+    },
+    {
+      id: '3',
+      message: 'Connecting to data source... Connected.',
+      type: 'success'
+    },
+    {
+      id: '4',
+      message: 'Processing batch #1 (250 records)',
+      type: 'info'
+    },
+    {
+      id: '5',
+      message: 'Processing batch #2 (250 records)',
+      type: 'info'
+    },
+    {
+      id: '6',
+      message: 'Processing batch #3 (250 records)',
+      type: 'info'
+    },
+    {
+      id: '7',
+      message: 'Processing complete. 750 records processed.',
+      type: 'success'
+    },
+    {
+      id: '8',
+      message: 'Generating summary report...',
+      type: 'info'
+    },
+    {
+      id: '9',
+      message: 'Summary report available at /reports/summary_240301_153042.json',
+      type: 'success'
+    },
+    {
+      id: '10',
+      message: 'Task completed successfully in 12.4 seconds.',
+      type: 'success'
+    },
+    {
+      id: '11',
+      message: 'Starting scheduled task "Server Monitoring Agent"',
+      type: 'info'
+    }
+  ])
+
+  // 筛选状态
+  const [filters, setFilters] = useState({
+    error: true,
+    warning: true,
+    info: true
+  })
+
+  // 面板状态
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
+  const [height, setHeight] = useState('200px')
+  const [resizing, setResizing] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // 筛选后的日志
+  const filteredLogs = logs.filter(log => {
+    if (log.type === 'error') return filters.error
+    if (log.type === 'warning') return filters.warning
+    if (log.type === 'info') return filters.info
+    return true
+  })
+
+  // 复制日志到剪贴板
+  const copyLogs = () => {
+    const logText = filteredLogs.map(log => `${log.type.toUpperCase()}: ${log.message}`).join('\n')
+    navigator.clipboard.writeText(logText).then(() => {
+      // 可以添加复制成功的提示
+      console.log('Logs copied to clipboard')
+    })
+  }
+
+  // 切换筛选器
+  const toggleFilter = (filterType: keyof typeof filters) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: !prev[filterType]
+    }))
+  }
+
+  // 切换面板显示/隐藏
+  const toggleMinimize = () => {
+    setIsMinimized(!isMinimized)
+    setIsExpanded(false)
+  }
+
+  // 切换面板展开/正常
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded)
+    setHeight(isExpanded ? '200px' : '100vh')
+  }
+
+  // 处理拖拽调整大小
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setResizing(true)
+  }
+
+  const handleResize = (e: MouseEvent) => {
+    if (!resizing || !panelRef.current || isMinimized || isExpanded) return
+    
+    const appHeight = document.documentElement.clientHeight
+    const newHeight = Math.max(100, appHeight - e.clientY)
+    setHeight(`${newHeight}px`)
+  }
+
+  const handleResizeEnd = () => {
+    setResizing(false)
+  }
+
+  // 监听全局鼠标事件
+  useEffect(() => {
+    if (resizing) {
+      document.addEventListener('mousemove', handleResize)
+      document.addEventListener('mouseup', handleResizeEnd)
+      
+      return () => {
+        document.removeEventListener('mousemove', handleResize)
+        document.removeEventListener('mouseup', handleResizeEnd)
+      }
+    }
+  }, [resizing])
+
+  return (
+    <>
+      {isMinimized ? (
+        // 最小化状态 - 底部栏
+        <div className="log-stream-minimized" onClick={toggleMinimize}>
+          <span className="log-stream-label">Log Stream</span>
+        </div>
+      ) : (
+        // 展开状态
+        <div 
+          ref={panelRef}
+          className={`log-stream ${isExpanded ? 'log-stream-expanded' : ''}`}
+          style={{ height }}
+        >
+          {/* 顶部控制栏 */}
+          <div className="log-header">
+            <div className="log-header-left">
+              <span className="log-header-title">Log Stream</span>
+            </div>
+            
+            {/* 筛选器按钮 */}
+            <div className="log-filters">
+              <div className="filter-dropdown">
+                <button className="filter-button">
+                  <span className="filter-icon">🔍</span>
+                  筛选器
+                </button>
+                <div className="filter-dropdown-content">
+                  <label className="filter-option">
+                    <input 
+                      type="checkbox" 
+                      checked={filters.error} 
+                      onChange={() => toggleFilter('error')}
+                    />
+                    显示错误
+                  </label>
+                  <label className="filter-option">
+                    <input 
+                      type="checkbox" 
+                      checked={filters.warning} 
+                      onChange={() => toggleFilter('warning')}
+                    />
+                    显示警告
+                  </label>
+                  <label className="filter-option">
+                    <input 
+                      type="checkbox" 
+                      checked={filters.info} 
+                      onChange={() => toggleFilter('info')}
+                    />
+                    显示信息
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            {/* 操作按钮 */}
+            <div className="log-actions">
+              <button 
+                className="log-action-button copy-button" 
+                onClick={copyLogs}
+                title="复制日志"
+              >
+                <span className="action-icon">📋</span>
+                复制
+              </button>
+              
+              <button 
+                className="log-action-button expand-button" 
+                onClick={toggleExpand}
+                title={isExpanded ? "恢复正常大小" : "全屏显示"}
+              >
+                <span className="action-icon">{isExpanded ? '⬇️' : '⬆️'}</span>
+                {isExpanded ? '恢复' : '展开'}
+              </button>
+              
+              <button 
+                className="log-action-button close-button" 
+                onClick={toggleMinimize}
+                title="关闭面板"
+              >
+                <span className="action-icon">✕</span>
+                关闭
+              </button>
+            </div>
+          </div>
+          
+          {/* 拖拽手柄 */}
+          <div className="resize-handle" onMouseDown={handleResizeStart}>
+            <div className="resize-indicator"></div>
+          </div>
+          
+          {/* 日志内容区域 */}
+          <div className="log-content">
+            {filteredLogs.length === 0 ? (
+              <div className="log-empty">没有符合筛选条件的日志</div>
+            ) : (
+              filteredLogs.map((entry) => (
+                <div key={entry.id} className={`log-entry ${entry.type}`}>
+                  <span className="log-prefix">&gt;</span>
+                  <span className="log-message">{entry.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+export default LogStream

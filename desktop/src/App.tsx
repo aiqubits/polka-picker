@@ -2,6 +2,8 @@ import { useState } from 'react'
 import './App.css'
 import MarketplaceContent from './components/MarketplaceContent'
 import ProfileContent from './components/ProfileContent'
+import ChatbotContent from './components/ChatbotContent'
+import LogStream from './components/LogStream'
 import type { Product } from './types'
 
 // 简化的任务类型
@@ -70,7 +72,7 @@ function App() {
   const [tasks] = useState<Task[]>(mockTasks)
   const [activeFilter, setActiveFilter] = useState<'all' | 'running' | 'idle' | 'error'>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [activePage, setActivePage] = useState<'home' | 'marketplace' | 'profile'>('home')
+  const [activePage, setActivePage] = useState<'home' | 'chatbot' | 'marketplace' | 'profile'>('home')
 
   // 模拟Marketplace产品数据
   const mockProducts: Product[] = [
@@ -172,6 +174,13 @@ function App() {
             >
               <span className="nav-icon">🏠</span>
               <span className="nav-text">Home</span>
+            </button>
+            <button 
+              className={`nav-item ${activePage === 'chatbot' ? 'active' : ''}`}
+              onClick={() => setActivePage('chatbot')}
+            >
+              <span className="nav-icon">🤖</span>
+              <span className="nav-text">Chatbot</span>
             </button>
             <button 
               className={`nav-item ${activePage === 'marketplace' ? 'active' : ''}`}
@@ -316,6 +325,8 @@ function App() {
                 <span className="add-icon">+</span>
               </button>
             </>
+          ) : activePage === 'chatbot' ? (
+            <ChatbotContent />
           ) : activePage === 'marketplace' ? (
             <MarketplaceContent products={mockProducts} />
           ) : (
@@ -325,55 +336,7 @@ function App() {
       </div>
 
       {/* Bottom Log Stream */}
-      <div className="log-stream">
-        <div className="log-header">Log Stream</div>
-        <div className="log-content">
-          <div className="log-entry success">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Starting task "Data Automation Pipeline"...</span>
-          </div>
-          <div className="log-entry info">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Loading configuration from data.config.json</span>
-          </div>
-          <div className="log-entry success">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Connecting to data source... Connected.</span>
-          </div>
-          <div className="log-entry info">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Processing batch #1 (250 records)</span>
-          </div>
-          <div className="log-entry info">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Processing batch #2 (250 records)</span>
-          </div>
-          <div className="log-entry info">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Processing batch #3 (250 records)</span>
-          </div>
-          <div className="log-entry success">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Processing complete. 750 records processed.</span>
-          </div>
-          <div className="log-entry info">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Generating summary report...</span>
-          </div>
-          <div className="log-entry success">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Summary report available at /reports/summary_240301_153042.json</span>
-          </div>
-          <div className="log-entry success">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Task completed successfully in 12.4 seconds.</span>
-          </div>
-          <div className="log-entry info">
-            <span className="log-prefix">&gt;</span>
-            <span className="log-message">Starting scheduled task "Server Monitoring Agent"</span>
-          </div>
-        </div>
-      </div>
+      <LogStream />
     </div>
   )
 }
