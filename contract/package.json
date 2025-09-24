@@ -16,6 +16,7 @@
     "chai": "^6.0.1",
     "forge-std": "github:foundry-rs/forge-std#v1.9.4",
     "hardhat": "^3.0.6",
+    "solidity-coverage": "^0.8.16",
     "typescript": "~5.8.0",
     "viem": "^2.37.5"
   },

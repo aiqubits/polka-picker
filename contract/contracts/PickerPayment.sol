@@ -158,7 +158,6 @@ contract PickerPayment is AccessControl, ReentrancyGuard {
         // 计算分配金额
         uint256 amount = msg.value;
         uint256 devShare = amount * DEV_SHARE_PERCENT / PERCENT_DENOMINATOR;
-        uint256 fee = amount - devShare;
 
         // 转账给开发者
         (bool success, ) = payable(devWalletAddress).call{value: devShare}("");
