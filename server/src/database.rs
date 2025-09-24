@@ -5,6 +5,7 @@ use chrono::Utc;
 use crate::utils::{hash_password_with_user_id, generate_wallet};
 use std::fs;
 use url::Url;
+use std::time::Duration;
 
 pub type DbPool = Pool<Sqlite>;
 
@@ -41,7 +42,8 @@ pub async fn create_pool() -> Result<DbPool, sqlx::Error> {
 
     // 创建连接池
     let pool = SqlitePoolOptions::new()
-        .max_connections(5) // 设置连接池大小
+        .max_connections(10) // 设置连接池大小
+        .acquire_timeout(Duration::from_secs(15)) // 增加超时时间
         .connect(&database_url)
         .await?;
     info!("Connecting to database: {}", database_url);
@@ -161,13 +163,14 @@ pub async fn insert_test_data(pool: &DbPool) -> Result<(), sqlx::Error> {
     
     // 配置信息（使用默认值）
     let salt = "openpick";
-    let master_key: &'static str = "b3BlbnBpY2tvcGVucGlja29wZW5waWNrb3BlbnBpY2s="; // base64编码的"openpickopenpickopenpickopenpick"
-    let nonce = "b3BlbnBpY2tvcGVu"; // base64编码的"openpickopen"
+    let master_key = "openpickopenpickopenpickopenpick";
+    let nonce = "openpickopen";
     
     // 1. 创建测试用户
     let test_email = "testdata@openpick.org";
     let test_password = "testpassword";
-    let test_user_name = "Test Data User";
+    let test_user_name: &'static str = "Test Data User";
+    let test_user_premium_balance = 1000;
     
     // 哈希密码
     let hashed_password = hash_password_with_user_id(test_password, test_user_id, salt);
@@ -193,7 +196,7 @@ pub async fn insert_test_data(pool: &DbPool) -> Result<(), sqlx::Error> {
     .bind("dev") // 设置为开发者类型，可以创建picker
     .bind(private_key)
     .bind(&wallet_address)
-    .bind(0) // premium_balance
+    .bind(test_user_premium_balance) // premium_balance
     .bind(&now)
     .execute(pool)
     .await?;
@@ -203,7 +206,7 @@ pub async fn insert_test_data(pool: &DbPool) -> Result<(), sqlx::Error> {
     // 2. 创建测试Picker
     let test_picker_alias = "testpicker";
     let test_picker_description = "testpicker description";
-    let test_picker_price = 100; // 示例价格
+    let test_picker_price = 1; // 示例价格
     
     // 插入测试Picker
     sqlx::query(

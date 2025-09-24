@@ -14,10 +14,10 @@ cleanup_minutes = 10
 
 # 区块链配置
 [blockchain]
-name = "conflux"
-rpc_url = "https://evmtestnet.confluxrpc.com"
-token_usdt_url = "https://www.okx.com/api/v5/market/ticker?instId=CFX-USDT"
-authorized_contract_address = "0x2ed3dddae5b2f321af0806181fbfa6d049be47d8"
+name = "ETH"
+rpc_url = "https://sepolia.infura.io/v3/7cb673f9a1324974899fc4cd4429b450"
+token_usdt_url = "https://www.okx.com/api/v5/market/ticker?instId=ETH-USDT"
+authorized_contract_address = "0x1B0b2ef32Eba0Aa15B123633e2145D708eD2C5E9"
 retry_times = 5
 retry_interval_seconds = 10 
 

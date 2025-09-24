@@ -81,19 +81,20 @@ pub fn is_valid_email(email: &str) -> bool {
 }
 
 // 使用AES-256-GCM加密密码（可恢复）
+// 修改encrypt_private_key和decrypt_private_key函数，移除不必要的base64编码
+
+// 修改后的encrypt_private_key函数
 pub fn encrypt_private_key(password: &str, master_key: &str, nonce: &str) -> Result<String, AppError> {
-    // 对master_key进行base64编码，确保获取足够的字节长度
-    let master_key_encoded = general_purpose::STANDARD.encode(master_key);
-    let master_key_bytes = master_key_encoded.as_bytes();
+    // 直接使用master_key的字节，不再进行base64编码
+    let master_key_bytes = master_key.as_bytes();
     
     // 确保master_key有32字节（AES-256需要）
     let mut key_array = [0u8; 32];
     let copy_len = std::cmp::min(master_key_bytes.len(), 32);
     key_array[..copy_len].copy_from_slice(&master_key_bytes[..copy_len]);
     
-    // 对nonce进行base64编码，确保获取足够的字节长度
-    let nonce_encoded = general_purpose::STANDARD.encode(nonce);
-    let nonce_bytes = nonce_encoded.as_bytes();
+    // 直接使用nonce的字节，不再进行base64编码
+    let nonce_bytes = nonce.as_bytes();
     
     // 确保nonce有12字节（GCM模式推荐）
     let mut nonce_array = [0u8; 12];
@@ -104,31 +105,31 @@ pub fn encrypt_private_key(password: &str, master_key: &str, nonce: &str) -> Res
     let nonce_obj = Nonce::<Aes256Gcm>::from_slice(&nonce_array);
     
     // 创建加密器并加密密码
-    let cipher = Aes256Gcm::new_from_slice(&key_array).map_err(|_| AppError::InternalServerError)?;
+    let cipher = Aes256Gcm::new_from_slice(&key_array).map_err(|e| {
+        tracing::error!("AES-256-GCM key init failed: {:?}", e);
+        AppError::InternalServerError})?;
     let ciphertext = cipher.encrypt(nonce_obj, password.as_bytes())
-        .map_err(|_| AppError::InternalServerError)?;
+        .map_err(|e| {
+            tracing::error!("AES-256-GCM encrypt failed: {:?}", e);
+            AppError::InternalServerError})?;
     
     // 将密文编码为Base64并返回
     Ok(general_purpose::STANDARD
         .encode(ciphertext))
 }
 
-// ... existing code ...
-
 // 解密恢复原始密码
 pub fn decrypt_private_key(encrypted: &str, master_key: &str, nonce: &str) -> Result<String, AppError> {
-    // 对master_key进行base64编码，确保获取足够的字节长度
-    let master_key_encoded = general_purpose::STANDARD.encode(master_key);
-    let master_key_bytes = master_key_encoded.as_bytes();
+    // 直接使用master_key的字节，不再进行base64编码
+    let master_key_bytes = master_key.as_bytes();
     
     // 确保master_key有32字节（AES-256需要）
     let mut key_array = [0u8; 32];
     let copy_len = std::cmp::min(master_key_bytes.len(), 32);
     key_array[..copy_len].copy_from_slice(&master_key_bytes[..copy_len]);
     
-    // 对nonce进行base64编码，确保获取足够的字节长度
-    let nonce_encoded = general_purpose::STANDARD.encode(nonce);
-    let nonce_bytes = nonce_encoded.as_bytes();
+    // 直接使用nonce的字节，不再进行base64编码
+    let nonce_bytes = nonce.as_bytes();
     
     // 确保nonce有12字节（GCM模式推荐）
     let mut nonce_array = [0u8; 12];
@@ -141,15 +142,23 @@ pub fn decrypt_private_key(encrypted: &str, master_key: &str, nonce: &str) -> Re
     // Base64解码密文
     let ciphertext = general_purpose::STANDARD
         .decode(encrypted)
-        .map_err(|_| AppError::InternalServerError)?;
+        .map_err(|e| {
+            tracing::error!("Base64 decode failed: {:?}", e);
+            AppError::InternalServerError})?;
     
     // 创建解密器并解密
-    let cipher = Aes256Gcm::new_from_slice(&key_array).map_err(|_| AppError::InternalServerError)?;
+    let cipher = Aes256Gcm::new_from_slice(&key_array).map_err(|e| {
+        tracing::error!("AES-256-GCM key init failed: {:?}", e);
+        AppError::InternalServerError})?;
     let plaintext = cipher.decrypt(nonce_obj, ciphertext.as_ref())
-        .map_err(|_| AppError::InternalServerError)?;
+        .map_err(|e| {
+            tracing::error!("AES-256-GCM decrypt failed: {:?}", e);
+            AppError::InternalServerError})?;
     
     // 转换为字符串
-    String::from_utf8(plaintext).map_err(|_| AppError::InternalServerError)
+    String::from_utf8(plaintext).map_err(|e| {
+        tracing::error!("Decrypted plaintext is not valid UTF-8: {:?}", e);
+        AppError::InternalServerError})
 }
 
 // 使用自定义 salt 哈希密码

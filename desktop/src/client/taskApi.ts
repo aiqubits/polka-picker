@@ -53,55 +53,6 @@ export interface TaskSchema {
 // 模拟延迟
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// // 模拟任务数据库
-// const localTasksDatabase = [
-//   {
-//     id: '1',
-//     user_id: '1',
-//     name: 'Data Automation Pipeline',
-//     status: 'running' as const,
-//     installed: '240128',
-//     runs: 128,
-//     lastRun: '240301'
-//   },
-//   {
-//     id: '2',
-//     user_id: '1',
-//     name: 'Customer Data Processing',
-//     status: 'idle' as const,
-//     installed: '240205',
-//     runs: 84,
-//     lastRun: '240228'
-//   },
-//   {
-//     id: '3',
-//     user_id: '1',
-//     name: 'Server Monitoring Agent',
-//     status: 'running' as const,
-//     installed: '240112',
-//     runs: 312,
-//     lastRun: '240301'
-//   },
-//   {
-//     id: '4',
-//     user_id: '1',
-//     name: 'Backup System Task',
-//     status: 'error' as const,
-//     installed: '240220',
-//     runs: 28,
-//     lastRun: '240229'
-//   },
-//   {
-//     id: '5',
-//     user_id: '2',
-//     name: 'Admin Dashboard Update',
-//     status: 'running' as const,
-//     installed: '240115',
-//     runs: 200,
-//     lastRun: '240301'
-//   }
-// ]
-
 // 任务 API 服务类
 class TaskAPIService {
   private logListeners: Map<string, (log: TaskLog) => void> = new Map();

@@ -61,8 +61,9 @@ const MainContent: React.FC = () => {
         console.log('Initializing MainContent component...');
         await taskAPI.addStatusListener(statusListenerRef.current!);
         console.log('Status listener registered successfully');
-        await fetchTasks(true); // 强制初始加载
-        console.log('Initial tasks loaded');
+        // 移除这行代码，避免重复请求
+        // await fetchTasks(true); // 强制初始加载
+        console.log('Initial tasks should be loaded via status listener');
       } catch (error) {
         console.error('Failed to initialize component:', error);
       }
@@ -79,7 +80,7 @@ const MainContent: React.FC = () => {
         window.clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [fetchTasks]); // 空依赖数组，避免无限循环
+  }, [fetchTasks]);
 
   // 任务操作处理函数（增强版）
   const handleRunTask = async (taskId: string) => {

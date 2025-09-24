@@ -129,7 +129,7 @@ impl AppState {
                 },
                 blockchain: BlockchainConfig {
                     name: "eth".to_string(),
-                    rpc_url: "https://evmtestnet.confluxrpc.com".to_string(),
+                    rpc_url: "https://sepolia.infura.io/v3/7cb673f9a1324974899fc4cd4429b450".to_string(),
                     token_usdt_url: "https://www.okx.com/api/v5/market/ticker?instId=USDC-USDT".to_string(),
                     authorized_contract_address: "0x2ed3dddae5b2f321af0806181fbfa6d049be47d8".to_string(),
                     retry_times: 5,

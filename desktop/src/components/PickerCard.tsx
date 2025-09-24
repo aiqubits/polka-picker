@@ -19,7 +19,9 @@ const PickerCard = ({ picker }: PickerCardProps) => {
     progress: 0
   })
   const [paymentDialogVisible, setPaymentDialogVisible] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false) // 添加处理状态标记，从支付确认后开始，到整个下载流程结束
   const paymentMethodResolveRef = useRef<(value: string | null) => void>(() => {})
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   
   const renderStars = (score: number) => {
     const stars = []
@@ -46,30 +48,6 @@ const PickerCard = ({ picker }: PickerCardProps) => {
     return stars
   }
 
-  // // 显示自定义对话框
-  // const showCustomAlert = (title: string, message: string, buttonText = 'OK', onConfirm?: () => void) => {
-  //   setDialogContent({
-  //     title,
-  //     message,
-  //     buttonText,
-  //     onConfirm: onConfirm || (() => {}),
-  //     showProgress,
-  //     progress
-  //   })
-  //   setDialogVisible(true)
-  // }
-
-  // // 关闭对话框
-  // const closeDialog = () => {
-  //   setDialogVisible(false)
-  // }
-
-  // // 确认对话框操作
-  // const confirmDialog = () => {
-  //   dialogContent.onConfirm()
-  //   closeDialog()
-  // }
-
   // 检查登录状态并处理购买流程
   const handlePurchase = async () => {
     try {
@@ -89,14 +67,30 @@ const PickerCard = ({ picker }: PickerCardProps) => {
         const downToken = await clientAPI.createOrder(picker.picker_id, payType)
         
         // 显示下载进度对话框，设置初始进度为0
-        showCustomAlert('Download Progress', 'Downloading...', 'Cancel', () => {}, true, 0)
+        showCustomAlert('Download Progress', 'Downloading...', 'Cancel', () => {
+          // 清理定时器
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current)
+            progressIntervalRef.current = null
+          }
+          setIsProcessing(false) // 取消时也要重置处理状态
+        }, true, 0)
         
         // 模拟下载进度
         let progress = 0
-        const progressInterval = setInterval(() => {
+        
+        // 清除之前可能存在的定时器
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+        }
+        
+        progressIntervalRef.current = setInterval(() => {
           progress += 5
           if (progress >= 100) {
-            clearInterval(progressInterval)
+            if (progressIntervalRef.current) {
+              clearInterval(progressIntervalRef.current)
+              progressIntervalRef.current = null
+            }
             console.log('download progress', progress)
             console.log('downToken', downToken)
             // 调用 Picker 下载接口，获取真实的下载路径
@@ -108,10 +102,12 @@ const PickerCard = ({ picker }: PickerCardProps) => {
 
                 showCustomAlert('Download Complete', `File ${fileName} downloaded to:\n${path || 'Local storage'}`, 'OK', () => {
                   // 点击OK后关闭对话框并退出流程
+                  setIsProcessing(false)
                 })
               } else {
                 showCustomAlert('Download Complete', `File downloaded to:\n 'Local storage'}`, 'OK', () => {
                   // 点击OK后关闭对话框并退出流程
+                  setIsProcessing(false)
                 })
               }
               
@@ -120,7 +116,9 @@ const PickerCard = ({ picker }: PickerCardProps) => {
               const errorMessage = error instanceof Error ? 
                 (error.message || 'Download failed.') : 
                 'An unexpected error occurred during download.'
-              showCustomAlert('Download Error', errorMessage)
+              showCustomAlert('Download Error', errorMessage, 'OK', () => {
+                setIsProcessing(false)
+              })
             })
           } else {
             // 更新进度条
@@ -136,7 +134,9 @@ const PickerCard = ({ picker }: PickerCardProps) => {
       const errorMessage = error instanceof Error ? 
         (error.message || 'Purchase failed.') : 
         'An unexpected error occurred.'
-      showCustomAlert('Error', errorMessage)
+      showCustomAlert('Error', errorMessage, 'OK', () => {
+        setIsProcessing(false)
+      })
     }
   }
   
@@ -162,7 +162,10 @@ const PickerCard = ({ picker }: PickerCardProps) => {
 
   // 关闭对话框
   const closeDialog = () => {
-    setDialogVisible(false)
+    // 只有非处理状态下才允许关闭对话框
+    if (!isProcessing || dialogContent.title === 'Download Complete' || dialogContent.title === 'Download Error') {
+      setDialogVisible(false)
+    }
   }
 
   // 确认对话框操作
@@ -181,6 +184,9 @@ const PickerCard = ({ picker }: PickerCardProps) => {
 
   // 选择支付方式
   const selectPaymentMethod = (method: string) => {
+    // 选择支付方式后立即设置为处理中状态，开始阻止用户交互
+    setIsProcessing(true)
+    
     if (typeof paymentMethodResolveRef.current === 'function') {
       paymentMethodResolveRef.current(method)
     }
@@ -202,7 +208,7 @@ const PickerCard = ({ picker }: PickerCardProps) => {
         <div className="picker-header">
           <div className="picker-category">{picker.version}</div>
           <div className="picker-actions">
-            <button className="picker-menu" title="More options">
+            <button className="picker-menu" title="More options" disabled={isProcessing}>
                ⋮
             </button>
           </div>
@@ -249,15 +255,40 @@ const PickerCard = ({ picker }: PickerCardProps) => {
         <button 
           className={`action-button ${picker.status === 'active' ? 'active' : 'inactive'}`}
           onClick={handlePurchase}
-          disabled={picker.status !== 'active'}
+          disabled={picker.status !== 'active' || isProcessing}
         >
           {picker.status === 'active' ? 'For Sale' : 'Discontinued'}
         </button>
       </div>
       
+      {/* 全局遮罩层 - 当isProcessing为true时显示，阻止整个页面的交互 */}
+      {isProcessing && (
+        <div 
+          className="global-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'transparent',
+            zIndex: 999,
+            pointerEvents: 'all',
+            cursor: 'wait'
+          }}
+        />
+      )}
+      
       {/* 自定义对话框组件，添加进度条显示 */}
       {dialogVisible && (
-        <div className="custom-dialog-overlay" onClick={closeDialog}>
+        <div 
+          className="custom-dialog-overlay"
+          // 只有在处理完成时才允许点击关闭
+          onClick={!isProcessing || dialogContent.title === 'Download Complete' || dialogContent.title === 'Download Error' ? closeDialog : undefined}
+          style={{
+            cursor: isProcessing && dialogContent.title === 'Download Progress' ? 'wait' : 'pointer'
+          }}
+        >
           <div className="custom-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="custom-dialog-header">
               <h3 className="custom-dialog-title">{dialogContent.title}</h3>
@@ -288,7 +319,7 @@ const PickerCard = ({ picker }: PickerCardProps) => {
         </div>
       )}
       
-      {/* 支付方式选择对话框保持不变 */}
+      {/* 支付方式选择对话框 */}
       {paymentDialogVisible && (
         <div className="custom-dialog-overlay" onClick={cancelPaymentMethod}>
           <div className="custom-dialog" onClick={(e) => e.stopPropagation()}>
