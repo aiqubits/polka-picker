@@ -16,6 +16,8 @@ use zip::ZipArchive;
 use log::info;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use crate::utils::utils::determine_log_level;
+use rust_agent::McpTool;
+use log::error;
 
 const PICKER_DIR: &str = ".picker";
 const TASK_SCHEMA_FILE: &str = "tasks.toml";
@@ -81,7 +83,7 @@ impl EnvConfig {
         // 构建配置
         let config = builder
             .build()
-            .map_err(|e| format!("配置加载失败: {}", e))?;
+            .map_err(|e| format!("Failed to load config file: {}", e))?;
 
         // 获取 environment 部分，如果不存在则使用空的 HashMap
         let environment = match config.get_table("environment") {
@@ -255,7 +257,7 @@ impl ProjectConfig {
         // 构建配置
         let config = builder
             .build()
-            .map_err(|e| format!("配置加载失败: {}", e))?;
+            .map_err(|e| format!("Configuration loading failed: {}", e))?;
 
         // 尝试从project部分获取配置，如果不存在则提供默认值
         match config.get::<Self>("project") {
@@ -283,17 +285,17 @@ impl ProjectConfig {
 
         // 将ProjectConfig转换为toml::Value
         let project_toml =
-            toml::to_string(&self).map_err(|e| format!("序列化项目配置失败: {}", e))?;
+            toml::to_string(&self).map_err(|e| format!("Serialization of project configuration failed: {}", e))?;
 
         let project_value =
-            toml::from_str(&project_toml).map_err(|e| format!("解析项目配置失败: {}", e))?;
+            toml::from_str(&project_toml).map_err(|e| format!("Parsing of project configuration failed: {}", e))?;
 
         // 将项目配置放入"project"命名空间
         config_map.insert("project".to_string(), project_value);
 
         // 将完整配置写回文件，使用安全写入方法
         let toml_content =
-            toml::to_string(&config_map).map_err(|e| format!("序列化配置失败: {}", e))?;
+            toml::to_string(&config_map).map_err(|e| format!("Serialization of configuration failed: {}", e))?;
 
         TaskConfig::safe_write_file(path, &toml_content)
     }
@@ -342,6 +344,23 @@ pub struct TaskConfig {
     pub last_run: Option<String>,
 }
 
+// 为TaskConfig添加From特性实现
+impl From<TaskConfig> for McpTool {
+    fn from(task_config: TaskConfig) -> Self {
+        // 使用task_config的id作为McpTool的name
+        let name = task_config.id;
+        // 构建description，包含任务的名称和状态等信息
+        let description = format!(
+            "Run a local task using the specified ID. For example: 'Help me run the task with ID {}'. 
+            The parameter request body you should extract is: '\"parameters\": {{ \"task_id\": \"{}\" }}'", name, name);
+        
+        McpTool {
+            name,
+            description,
+        }
+    }
+}
+
 impl TaskConfig {
     fn new() -> Self {
         TaskConfig {
@@ -360,13 +379,13 @@ impl TaskConfig {
         let temp_path = file_path.with_extension("tmp");
 
         // 写入临时文件
-        fs::write(&temp_path, content).map_err(|e| format!("写入临时文件失败: {}", e))?;
+        fs::write(&temp_path, content).map_err(|e| format!("Writing temporary file failed: {}", e))?;
 
         // 原子性地重命名临时文件到目标文件
         fs::rename(&temp_path, file_path).map_err(|e| {
             // 如果重命名失败，尝试清理临时文件
             let _ = fs::remove_file(&temp_path);
-            format!("更新配置文件失败: {}", e)
+            format!("Safe write to {} failed: {}", file_path.display(), e)
         })
     }
 
@@ -442,7 +461,7 @@ impl TaskConfig {
                 // 将完整配置写回文件
                 if let Ok(toml_content) = toml::to_string(&config_map) {
                     if let Err(e) = Self::safe_write_file(config_path, &toml_content) {
-                        eprintln!("更新任务配置失败: {}", e);
+                        error!("Safe write to {} failed: {}", config_path.display(), e);
                     }
                 }
             }
@@ -505,12 +524,12 @@ impl TaskConfig {
         // 构建配置
         let config = builder
             .build()
-            .map_err(|e| format!("配置加载失败: {}", e))?;
+            .map_err(|e| format!("Loading of configuration failed: {}", e))?;
 
         // 尝试从task部分获取配置，如果不存在则返回错误
         match config.get::<Self>("task") {
             Ok(task_config) => Ok(task_config),
-            Err(e) => Err(format!("获取任务配置失败: {}", e)),
+            Err(e) => Err(format!("Getting of task configuration failed: {}", e)),
         }
     }
 
@@ -528,16 +547,16 @@ impl TaskConfig {
 fn safe_path(path: &Path, base_dir: &Path) -> Result<PathBuf, String> {
     // 获取绝对路径，捕获更详细的错误
     let absolute_path = fs::canonicalize(path)
-        .map_err(|e| format!("获取绝对路径失败 '{}': {}", path.display(), e))?;
+        .map_err(|e| format!("Canonicalization of path '{}' failed: {}", path.display(), e))?;
 
     // 确保基础目录也是绝对路径
     let base_dir_absolute =
-        fs::canonicalize(base_dir).map_err(|e| format!("获取基础目录绝对路径失败: {}", e))?;
+        fs::canonicalize(base_dir).map_err(|e| format!("Canonicalization of base directory '{}' failed: {}", base_dir.display(), e))?;
 
     // 检查路径是否在基础目录内
     if !absolute_path.starts_with(&base_dir_absolute) {
         return Err(format!(
-            "安全检查失败: 路径 '{}' 不在允许的目录 '{}' 范围内",
+            "Security check failed: Path '{}' is not within the allowed directory '{}'",
             absolute_path.display(),
             base_dir_absolute.display()
         ));
@@ -553,7 +572,7 @@ fn safe_path(path: &Path, base_dir: &Path) -> Result<PathBuf, String> {
         if let Ok(metadata) = parent.symlink_metadata() {
             if metadata.file_type().is_symlink() {
                 return Err(format!(
-                    "安全检查失败: 路径 '{}' 包含符号链接 '{}'",
+                    "Security check failed: Path '{}' contains a symlink '{}'",
                     absolute_path.display(),
                     parent.display()
                 ));
@@ -587,7 +606,7 @@ impl RunningTasks {
         app_handle.emit(
             "task_status_changed",
             format!("Task {} started", task_id)
-        ).map_err(|e| format!("发送任务状态变更事件失败: {}", e))?;
+        ).map_err(|e| format!("Sending of task status changed event failed: {}", e))?;
         Ok(())
     }
 
@@ -600,7 +619,7 @@ impl RunningTasks {
             app_handle.emit(
                 "task_status_changed",
                 format!("Task {} stopped", task_id)
-            ).map_err(|e| format!("发送任务状态变更事件失败: {}", e))?;
+            ).map_err(|e| format!("Sending of task status changed event failed: {}", e))?;
         }
         Ok(result)
     }
@@ -628,7 +647,7 @@ impl TaskManager {
         // 确保扫描目录存在
         if !scan_directory.exists() {
             if let Err(e) = fs::create_dir_all(&scan_directory) {
-                eprintln!("无法创建扫描目录: {:?}, 错误: {}", scan_directory, e);
+                eprintln!("Failed to create scan directory '{}': {:?}", scan_directory.display(), e);
             }
         }
 
@@ -645,7 +664,7 @@ impl TaskManager {
         if let Some(schema) = task_schemas.into_iter().find(|s| s.task_id == task_id) {
             Ok(schema)
         } else {
-            Err(format!("未找到任务 {} 的 TaskSchema", task_id))
+            Err(format!("Task schema for '{}' not found", task_id))
         }
     }
 
@@ -691,7 +710,7 @@ impl TaskManager {
     }
 
     // 扫描 tasks.toml 文件发现所有任务，返回有效任务列表
-    async fn get_all_tasks(&self, app_handle: &AppHandle) -> Result<Vec<TaskConfig>, String> {
+    pub async fn get_all_tasks(&self, app_handle: &AppHandle) -> Result<Vec<TaskConfig>, String> {
         // 先克隆任务配置，然后在锁外调用 load_tasks
         let task_config = self.task_config.lock().await.clone();
         let tasks = task_config.load_tasks(&TaskSchema::load_task_schemas());
@@ -712,13 +731,13 @@ impl TaskManager {
 
         // 检查任务是否已经在运行
         if self.running_tasks.is_running(task_id).await? {
-            return Err("任务已经在运行中".to_string());
+            return Err(format!("Task '{}' is already running", task_id));
         }
 
         // 获取任务入口文件路径
         let file_path = Path::new(&task_schema.entry_path);
         if !file_path.exists() {
-            return Err("任务入口文件不存在".to_string());
+            return Err(format!("Entry file for task '{}' does not exist", task_id));
         }
         // 根据文件类型执行不同的命令
         let mut child = if cfg!(target_os = "windows") {
@@ -749,11 +768,11 @@ impl TaskManager {
                         .spawn()
                         .map_err(|e| e.to_string())?,
                     _ => {
-                        return Err(format!("不支持的文件类型: {}", ext));
+                        return Err(format!("Unsupported file type '{}' for task '{}'", ext, task_id));
                     }
                 }
             } else {
-                return Err("无法确定文件类型".to_string());
+                return Err(format!("Could not determine file type for task '{}'", task_id));
             }
         } else {
             // Unix-like systems
@@ -878,7 +897,7 @@ impl TaskManager {
     async fn stop_task(&self, task_id: &str, app_handle: &AppHandle) -> Result<(), String> {
         if let Some(mut child) = self.running_tasks.remove(task_id, app_handle).await? {
             if let Err(e) = child.kill().await {
-                return Err(format!("停止任务失败: {}", e));
+                return Err(format!("Failed to kill task '{}': {}", task_id, e));
             }
 
             // 创建任务更新 - 仅更新状态
@@ -894,7 +913,7 @@ impl TaskManager {
         
             Ok(())
         } else {
-            Err("任务没有在运行中".to_string())
+            Err(format!("Task '{}' is not running", task_id))
         }
     }
 
@@ -906,7 +925,7 @@ impl TaskManager {
         // let safe_path = safe_path(path, &self.scan_directory)?;
 
         if !path.exists() || !path.is_file() {
-            return Err("指定的入口文件不存在".to_string());
+            return Err(format!("Entry file '{}' does not exist", picker_path));
         }
 
         let task_id = Uuid::new_v4().to_string();
@@ -919,19 +938,19 @@ impl TaskManager {
                 // 创建目标目录
                 if !task_directory.exists() {
                     fs::create_dir_all(&task_directory)
-                        .map_err(|e| format!("创建目录失败: {}", e))?;
+                        .map_err(|e| format!("Failed to create directory '{}': {}", task_directory.display(), e))?;
                 }
 
                 // 打开zip文件
-                let file = fs::File::open(path).map_err(|e| format!("打开压缩文件失败: {}", e))?;
+                let file = fs::File::open(path).map_err(|e| format!("Failed to open zip file '{}': {}", path.display(), e))?;
                 // 解压文件
                 let mut archive =
-                    ZipArchive::new(file).map_err(|e| format!("解析压缩文件失败: {}", e))?;
+                    ZipArchive::new(file).map_err(|e| format!("Failed to parse zip file '{}': {}", path.display(), e))?;
 
                 for i in 0..archive.len() {
                     let mut file = archive
                         .by_index(i)
-                        .map_err(|e| format!("读取压缩文件内容失败: {}", e))?;
+                        .map_err(|e| format!("Failed to read file from zip '{}': {}", path.display(), e))?;
                     let outpath = match file.enclosed_name() {
                         Some(path) => task_directory.join(path),
                         None => continue,
@@ -940,28 +959,28 @@ impl TaskManager {
                     if file.name().ends_with('/') {
                         // 创建目录
                         fs::create_dir_all(&outpath)
-                            .map_err(|e| format!("创建解压目录失败: {}", e))?;
+                            .map_err(|e| format!("Failed to create directory '{}': {}", outpath.display(), e))?;
                     } else {
                         // 确保父目录存在
                         if let Some(parent) = outpath.parent() {
                             if !parent.exists() {
                                 fs::create_dir_all(parent)
-                                    .map_err(|e| format!("创建父目录失败: {}", e))?;
+                                    .map_err(|e| format!("Failed to create parent directory '{}': {}", parent.display(), e))?;
                             }
                         }
 
                         // 写入文件
                         let mut outfile = fs::File::create(&outpath)
-                            .map_err(|e| format!("创建输出文件失败: {}", e))?;
+                            .map_err(|e| format!("Failed to create output file '{}': {}", outpath.display(), e))?;
                         std::io::copy(&mut file, &mut outfile)
-                            .map_err(|e| format!("写入文件内容失败: {}", e))?;
+                            .map_err(|e| format!("Failed to write file content to '{}': {}", outpath.display(), e))?;
                     }
                 }
             } else {
-                return Err(format!("不支持的文件类型: {}", ext));
+                return Err(format!("Unsupported file type: {}", ext));
             }
         } else {
-            return Err("无法确定文件类型".to_string());
+            return Err("Failed to determine file type".to_string());
         }
 
         // 根据不同的程序文件判断，搜索已经解压文件中的入口文件
@@ -973,7 +992,7 @@ impl TaskManager {
         let entry_dir = if let Some(parent) = absolute_entry.parent() {
             parent.to_path_buf()
         } else {
-            return Err("无法确定入口文件所在目录".to_string());
+            return Err("Failed to determine entry file directory".to_string());
         };
         // 在同一目录下判断如果没有 config.toml 文件则创建，如果有则直接使用
         let config_file_path = entry_dir.join(CONFIG_FILE);
@@ -1006,17 +1025,17 @@ impl TaskManager {
 
         // 直接将TaskConfig转换为toml格式
         let task_toml =
-            toml::to_string(&new_task).map_err(|e| format!("序列化任务配置失败: {}", e))?;
+            toml::to_string(&new_task).map_err(|e| format!("Failed to serialize task config: {}", e))?;
 
         // 解析任务配置为toml::Value
         let task_value =
-            toml::from_str(&task_toml).map_err(|e| format!("解析任务配置失败: {}", e))?;
+            toml::from_str(&task_toml).map_err(|e| format!("Failed to parse task config: {}", e))?;
 
         // 将任务配置放入"task"命名空间
         config_map.insert("task".to_string(), task_value);
         // 将完整配置写回文件，使用safe_write_file
         let toml_content =
-            toml::to_string(&config_map).map_err(|e| format!("序列化配置失败: {}", e))?;
+            toml::to_string(&config_map).map_err(|e| format!("Failed to serialize config: {}", e))?;
         TaskConfig::safe_write_file(&config_file_path, &toml_content)?;
 
         // 保存任务概要到 tasks.toml
@@ -1079,12 +1098,12 @@ impl TaskManager {
         }
 
         // 如果没有找到任何入口文件
-        Err("在解压目录中未找到有效的入口文件".to_string())
+        Err("Failed to find valid entry file in unpacked directory".to_string())
     }
 
     // 删除任务
     async fn delete_task(&self, task_id: &str, delete_file: bool, app_handle: &AppHandle) -> Result<(), String> {
-        let tasks = self.get_all_tasks(app_handle).await.map_err(|e| format!("获取任务列表失败: {}", e))?;
+        let tasks = self.get_all_tasks(app_handle).await.map_err(|e| format!("Failed to get task list: {}", e))?;
 
         if let Some(task) = tasks.iter().find(|t| t.id == task_id) {
             // 如果任务正在运行，先停止它
@@ -1096,7 +1115,7 @@ impl TaskManager {
             if delete_file {
                 let task_dir = self.get_task_dir(Some(task_id))?;
                 if let Err(e) = fs::remove_dir_all(task_dir) {
-                    return Err(format!("删除任务目录失败: {}", e));
+                    return Err(format!("Failed to delete task directory: {}", e));
                 }
             }
 
@@ -1115,7 +1134,7 @@ impl TaskManager {
                         // 保存更新后的任务列表
                         if let Ok(updated_content) = toml::to_string(&task_schemas) {
                             fs::write(&tasks_file, updated_content)
-                                .map_err(|e| format!("保存任务列表失败: {}", e))?;
+                                .map_err(|e| format!("Failed to write updated task list: {}", e))?;
                         }
                     }
                 }
@@ -1123,7 +1142,7 @@ impl TaskManager {
 
             Ok(())
         } else {
-            Err("找不到指定的任务".to_string())
+            Err("Failed to find specified task".to_string())
         }
     }
 }
@@ -1176,7 +1195,7 @@ impl TaskManager {
 
         // 将完整配置写回文件
         let toml_content =
-            toml::to_string(&config_map).map_err(|e| format!("序列化配置失败: {}", e))?;
+            toml::to_string(&config_map).map_err(|e| format!("Failed to serialize config: {}", e))?;
 
         // 使用安全的写入方法
         TaskConfig::safe_write_file(&config_path, &toml_content)?;
@@ -1221,11 +1240,11 @@ pub async fn setup_env(
     TASK_MANAGER.setup_env_impl(&task_id, env_map)?;
 
     // 3. 获取并返回更新后的任务配置
-    let tasks = TASK_MANAGER.get_all_tasks(&app_handle).await.map_err(|e| format!("获取任务列表失败: {}", e))?;
+    let tasks = TASK_MANAGER.get_all_tasks(&app_handle).await.map_err(|e| format!("Failed to get task list: {}", e))?;
     if let Some(task) = tasks.into_iter().find(|t| t.id == task_id) {
         Ok(task)
     } else {
-        Err("找不到指定的任务".to_string())
+        Err("Failed to find specified task".to_string())
     }
 }
 
@@ -1257,7 +1276,7 @@ pub fn get_task_schema(_app_handle: AppHandle, task_id: String) -> Result<TaskSc
 
 #[tauri::command]
 pub async fn list_tasks(app_handle: AppHandle) -> Result<Vec<TaskConfig>, String> {
-    Ok(TASK_MANAGER.get_all_tasks(&app_handle).await.map_err(|e| format!("获取任务列表失败: {}", e))?)
+    Ok(TASK_MANAGER.get_all_tasks(&app_handle).await.map_err(|e| format!("Failed to get task list: {}", e))?)
 }
 
 #[tauri::command]

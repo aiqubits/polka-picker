@@ -15,13 +15,7 @@ async fn main() {
         "获取指定城市的天气信息".to_string(),
     ));
     
-    let search_tool = Box::new(ExampleTool::new(
-        "search_knowledge".to_string(),
-        "搜索知识库获取相关信息".to_string(),
-    ));
-    
     agent.add_tool(weather_tool);
-    agent.add_tool(search_tool);
     
     // 创建Agent运行器
     let agent_runner = SimpleAgentRunner::new(agent);

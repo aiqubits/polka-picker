@@ -652,10 +652,10 @@ pub async fn create_order(
                 Ok(receipt) => {
                     if receipt.is_none() {
                         info!("交易未被确认，等待 {} 秒后重试", retry_interval_seconds);
-                        // if attempt < max_retries {
-                        //     tokio::time::sleep(Duration::from_secs(retry_interval_seconds as u64))
-                        //         .await;
-                        // }
+                        if attempt < max_retries {
+                            tokio::time::sleep(Duration::from_secs(retry_interval_seconds as u64))
+                                .await;
+                        }
                         continue;
                     }
                     return Ok(receipt);

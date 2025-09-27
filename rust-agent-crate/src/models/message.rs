@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 // 消息内容结构
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChatMessageContent {
     pub content: String,
     pub name: Option<String>,
@@ -12,7 +12,7 @@ pub struct ChatMessageContent {
 }
 
 // 简化的消息类型系统（与langchain-core对齐）
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ChatMessage {
     System(ChatMessageContent),
     Human(ChatMessageContent),

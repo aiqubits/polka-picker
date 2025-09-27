@@ -28,14 +28,9 @@ pub use anyhow;
 pub async fn run_agent(agent: &McpAgent, input: String) -> Result<String, Error> {
     let mut inputs = HashMap::new();
     inputs.insert("input".to_string(), input);
-    
     let output = agent.invoke(inputs).await?;
-    
     match output {
         AgentOutput::Action(action) => {
-            // println!("Agent决定调用工具: {}", action.tool);
-            // println!("工具输入: {}", action.tool_input);
-            
             // 查找对应的工具，使用模糊匹配机制
             let tools = agent.tools();
             match find_matching_tool_index(&tools, &action.tool) {
@@ -44,16 +39,15 @@ pub async fn run_agent(agent: &McpAgent, input: String) -> Result<String, Error>
                     if let Some(tool) = tools.iter().find(|t| t.name() == matched_name) {
                         // 调用工具
                         let tool_result = tool.invoke(&action.tool_input).await?;
-                        // println!("工具执行结果: {}", tool_result);
                         
                         // 这里可以选择是否将结果传回给Agent进行进一步处理
-                        Ok(format!("工具 {} 执行成功，结果: {}", matched_name, tool_result))
+                        Ok(format!("Task {} executed successfully, result: {}", matched_name, tool_result))
                     } else {
-                        Err(Error::msg(format!("工具 {} 不存在", matched_name)))
+                        Err(Error::msg(format!("Task {} does not exist", matched_name)))
                     }
                 },
                 None => {
-                    Err(Error::msg(format!("工具 {} 不存在", action.tool)))
+                    Err(Error::msg(format!("Task {} does not exist", action.tool)))
                 }
             }
         },

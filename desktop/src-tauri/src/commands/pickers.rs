@@ -73,12 +73,12 @@ pub async fn get_picker_detail(
         Err(err) => {
             // 返回更具体的错误信息
             match err {
-                ApiError::ValidationError(e) => Err(format!("验证错误: {}", e)),
-                ApiError::NetworkError(e) => Err(format!("网络错误: {:?}", e)),
-                ApiError::ServerError(e) => Err(format!("服务器错误: {}", e)),
-                ApiError::AuthError(e) => Err(format!("认证错误: {}", e)),
-                ApiError::NotFound => Err("未找到资源".to_string()),
-                ApiError::Unknown => Err("未知错误".to_string()),
+                ApiError::ValidationError(e) => Err(format!("Validation error: {}", e)),
+                ApiError::NetworkError(e) => Err(format!("Network error: {:?}", e)),
+                ApiError::ServerError(e) => Err(format!("Server error: {}", e)),
+                ApiError::AuthError(e) => Err(format!("Auth error: {}", e)),
+                ApiError::NotFound => Err("Resource not found".to_string()),
+                ApiError::Unknown => Err("Unknown error".to_string()),
             }
         }
     }

@@ -5,7 +5,7 @@ use crate::tools::{ExampleTool, Tool};
 use crate::core::Runnable;
 
 // Agent执行的动作（简化）
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AgentAction {
     pub tool: String,
     pub tool_input: String,
@@ -14,11 +14,13 @@ pub struct AgentAction {
 }
 
 // Agent完成执行的结果（简化）
+#[derive(Clone, Debug)]
 pub struct AgentFinish {
     pub return_values: HashMap<String, String>,
 }
 
 // 统一的Agent输出类型
+#[derive(Clone, Debug)]
 pub enum AgentOutput {
     Action(AgentAction),
     Finish(AgentFinish),
@@ -42,7 +44,7 @@ pub trait Agent: Send + Sync {
                     return tool.invoke(&tool_input).await;
                 }
             }
-            Err(Error::msg(format!("工具 {} 未找到", tool_name)))
+            Err(Error::msg(format!("The tool {} not found", tool_name)))
         })
     }
     
@@ -113,19 +115,19 @@ impl Runnable<HashMap<String, String>, AgentOutput> for SimpleAgentRunner {
             // 这里只是一个简单的实现，实际应该使用LLM来决定是调用工具还是直接返回结果
             // 为了演示，我们假设如果输入中有"tool"字段，就调用对应的工具
             if let Some(tool_name) = inputs_clone.get("tool") {
-                let tool_input = inputs_clone.get("input").unwrap_or(&"".to_string()).clone();
+                let tool_input = inputs_clone.get("input").unwrap_or(&"input empty".to_string()).clone();
                 
                 Ok(AgentOutput::Action(AgentAction {
                     tool: tool_name.to_string(),
                     tool_input,
-                    log: format!("调用工具: {}", tool_name),
-                    thought: Some("这是一个模拟的思考过程".to_string()),
+                    log: format!("Invoking tool: {}", tool_name),
+                    thought: Some("Invoking tool".to_string()),
                 }))
             } else {
                 // 否则返回一个简单的完成结果
                 let output_text = inputs_clone.get("input").unwrap_or(&"".to_string()).clone();
                 let mut return_values = HashMap::new();
-                return_values.insert("output".to_string(), format!("完成处理输入: {}", output_text));
+                return_values.insert("output".to_string(), format!("Finish processing input: {}", output_text));
                 
                 Ok(AgentOutput::Finish(AgentFinish {
                     return_values,

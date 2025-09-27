@@ -25,7 +25,7 @@ pub trait ChatModel: Send + Sync {
     fn invoke(&self, messages: Vec<ChatMessage>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ChatCompletion, Error>> + Send + '_>> {
         let _messages = messages;
         Box::pin(async move {
-            Err(Error::msg("该模型未实现invoke方法"))
+            Err(Error::msg("The model does not implement the invoke method"))
         })
     }
 }

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde_json::Value;
 use crate::tools::Tool;
 use super::client::{McpClient, McpTool};
-
+use log::info;
 // MCP工具适配器
 pub struct McpToolAdapter {
     mcp_client: Arc<dyn McpClient>,
@@ -52,7 +52,7 @@ impl Tool for McpToolAdapter {
         let client = self.mcp_client.clone();
         let tool_name = self.mcp_tool.name.clone();
         let input_str = input.to_string();
-        
+        info!("Invoking MCP tool {} with input: {}", tool_name, input_str);
         Box::pin(async move {
             // 尝试解析输入为JSON参数，增加容错处理
             let parameters: HashMap<String, Value> = match serde_json::from_str(&input_str) {

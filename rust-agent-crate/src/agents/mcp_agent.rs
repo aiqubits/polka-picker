@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use std::pin::Pin;
 use std::sync::Arc;
+use log::info;
 
 use crate::{
     Agent, AgentAction, AgentFinish, AgentOutput, ChatMessage, ChatMessageContent, ChatModel,
@@ -89,8 +90,8 @@ impl Agent for McpAgent {
             } else {
                 // 对于其他类型的工具，我们暂时跳过或需要实现其他克隆机制
                 // 这里可以添加日志或错误处理
-                println!(
-                    "警告: 无法克隆非 McpToolAdapter 类型的工具: {}",
+                info!(
+                    "Warning: Unable to clone non-McpToolAdapter type tool: {}",
                     tool.name()
                 );
             }
@@ -108,7 +109,7 @@ impl Agent for McpAgent {
         Box::pin(async move {
             // 在实际应用中，这里应该有一个机制来查找和调用工具
             // 由于我们不能克隆工具列表，这里简化实现
-            Err(anyhow!("工具执行功能暂未实现"))
+            Err(anyhow!("Tool execution functionality is not implemented yet"))
         })
     }
 
@@ -171,7 +172,7 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
         // 构建增强的系统提示词
         let enhanced_system_prompt = if !tool_descriptions.is_empty() {
             // 否则返回{{\"content\": \"回答内容\"}}
-            format!("{}\n\n可用工具:\n{}\n\n请根据用户需求决定是否使用工具。如果需要使用工具，请返回JSON格式：{{\"call_tool\": {{\"name\": \"工具名\", \"parameters\": {{...}}}}}}，否则返回{{}}", system_prompt, tool_descriptions)
+            format!("{}\n\nAvailable tools:\n{}\n\nPlease decide whether to use the tool based on user needs. If tools are needed, please return in JSON format:{{\"call_tool\": {{\"name\": \"Tool Name\", \"parameters\": {{...}}}}}}, else return{{}}", system_prompt, tool_descriptions)
         } else {
             system_prompt
         };
@@ -185,7 +186,7 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
             // 检查输入是否为空
             if input_text.is_empty() {
                 let mut return_values = std::collections::HashMap::new();
-                return_values.insert("answer".to_string(), "请输入有效内容".to_string());
+                return_values.insert("answer".to_string(), "Please enter valid content".to_string());
                 return_values.insert("model".to_string(), model_name);
                 return Ok(AgentOutput::Finish(AgentFinish { return_values }));
             }
@@ -225,7 +226,7 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
                     // 解析模型输出
                     let content = match completion.message {
                         ChatMessage::AIMessage(content) => content.content,
-                        _ => "".to_string(),
+                        _ => { format!("{},{:?}", "Non-AI message received", completion.message) }
                     };
 
                     // 解析模型输出，判断是否需要调用工具
@@ -251,9 +252,9 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
                             // 这里简化实现，直接返回一个默认的工具调用
                             Ok(AgentOutput::Action(AgentAction {
                                 tool: "default_tool".to_string(),
-                                tool_input: "{\"default_input\": \"默认输入\"}".to_string(),
-                                log: "调用默认工具".to_string(),
-                                thought: Some("模型输出解析失败调用默认工具".to_string()),
+                                tool_input: "{\"default_input\": \"Default Input\"}".to_string(),
+                                log: "Call default tool".to_string(),
+                                thought: Some("Model output parsing failed, call default tool".to_string()),
                             }))
                         } else {
                             // 直接返回回答
@@ -267,7 +268,7 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
                 Err(e) => {
                     // 出错时返回错误信息
                     let mut return_values = std::collections::HashMap::new();
-                    return_values.insert("answer".to_string(), format!("模型调用失败: {}", e));
+                    return_values.insert("answer".to_string(), format!("Model invocation failed: {}", e));
                     return_values.insert("model".to_string(), model_name);
                     Ok(AgentOutput::Finish(AgentFinish { return_values }))
                 }

@@ -7,7 +7,9 @@ use crate::agents::{AgentOutput, AgentAction, AgentFinish};
 /// 实现工具名称模糊匹配机制，返回匹配的工具名称
 pub fn find_matching_tool_index(tools: &[Box<dyn Tool + Send + Sync>], requested_tool: &str) -> Option<String> {
     // 1. 精确匹配 - 优先尝试完全匹配
-    if let Some(tool) = tools.iter().find(|t| t.name() == requested_tool) {
+    if let Some(tool) = tools.iter().find(|t| { 
+        t.name() == requested_tool 
+    }) {
         return Some(tool.name().to_string());
     }
     
@@ -21,7 +23,7 @@ pub fn find_matching_tool_index(tools: &[Box<dyn Tool + Send + Sync>], requested
         }
     }
     
-    // 3. 关键词匹配 - 针对天气相关查询，特殊处理
+    // 3. 关键词匹配 - 针对默认模拟工具，天气相关查询，特殊处理
     if requested_lower.contains("weather") || requested_lower.contains("天气") {
         if let Some(tool) = tools.iter().find(|t| t.name().to_lowercase().contains("weather") || t.name().to_lowercase().contains("天气")) {
             return Some(tool.name().to_string());
@@ -50,8 +52,8 @@ pub fn parse_model_output(content: &str) -> Result<AgentOutput, anyhow::Error> {
                 return Ok(AgentOutput::Action(AgentAction {
                     tool: tool_name,
                     tool_input,
-                    log: "调用工具".to_string(),
-                    thought: Some("根据模型输出调用工具".to_string()),
+                    log: "Call tool".to_string(),
+                    thought: Some("Call tool based on model output".to_string()),
                 }));
             }
         }
@@ -69,5 +71,5 @@ pub fn parse_model_output(content: &str) -> Result<AgentOutput, anyhow::Error> {
     }
     
     // 如果解析失败，返回错误
-    Err(anyhow::anyhow!("无法解析模型输出"))
+    Err(anyhow::anyhow!("Failed to parse model output"))
 }

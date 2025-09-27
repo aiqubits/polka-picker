@@ -3,7 +3,6 @@
 pub use super::models::{ApiError};
 use crate::config::AppConfig;
 use crate::utils::auth::AuthManager;
-use log::info;
 use reqwest::{Client as ReqwestClient, RequestBuilder, multipart::Form};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -340,7 +339,7 @@ where
         let url = response.url().clone();
         
         let message = format!("Failed to handle error response: {}", response.text().await.unwrap());
-        info!("Failed to handle error response: {:?}-{}", message, url);
+
         if status == reqwest::StatusCode::UNAUTHORIZED {
             return ApiError::AuthError(message);
         } else if status == reqwest::StatusCode::NOT_FOUND {

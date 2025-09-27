@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
-
+use log::info;
 #[derive(Serialize, Deserialize, Clone)]
 struct OpenAIMessage {
     role: String,
@@ -279,7 +279,7 @@ impl ChatModel for OpenAIChatModel {
             for (key, value) in additional_headers {
                 request = request.header(key, value);
             }
-
+            info!("OpenAI request body: {:?}", request_body);
             // 发送请求
             let response = request.json(&request_body).send().await?;
             

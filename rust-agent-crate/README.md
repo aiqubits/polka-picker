@@ -187,10 +187,6 @@ mcp_client.add_tools(vec![
     McpTool {
         name: "get_weather".to_string(),
         description: "获取指定城市的天气信息".to_string(),
-    },
-    McpTool {
-        name: "search_knowledge".to_string(),
-        description: "搜索知识库中的信息".to_string(),
     }
 ]);
 

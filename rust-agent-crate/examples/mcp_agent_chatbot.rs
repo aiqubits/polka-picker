@@ -14,11 +14,11 @@ async fn main() {
     let base_url = std::env::var("OPENAI_API_URL").ok();
     let mcp_url = std::env::var("MCP_URL").unwrap_or("http://localhost:8000/mcp".to_string());
     
-    // 创建OpenAI模型实例 - 支持MoonShot API
+    // 创建OpenAI模型实例 - 支持Openai兼容 API
     let model = OpenAIChatModel::new(api_key.clone(), base_url)
         .with_model("kimi-k2-0905-preview".to_string())
         .with_temperature(0.6)
-        .with_max_tokens(100*1024);
+        .with_max_tokens(8*1024);
     
     // 初始化MCP客户端
     // 在初始化 MCP 客户端后，自定义工具和工具处理器
@@ -31,49 +31,31 @@ async fn main() {
     mcp_client.add_tools(vec![
         McpTool {
             name: "get_weather".to_string(),
-            description: "获取指定城市的天气信息。例如：'北京的天气怎么样？'".to_string(),
-        },
-        McpTool {
-            name: "search_knowledge".to_string(),
-            description: "搜索知识库信息。例如：'什么是人工智能？'".to_string(),
+            description: "Get the weather information for a specified city. For example: 'What's the weather like in Beijing?'".to_string(),
         },
         McpTool {
             name: "simple_calculate".to_string(),
-            description: "执行简单的数学计算。例如：'9.11加9.8等于多少？'".to_string(),
+            description: "Perform simple mathematical calculations. For example: 'What is 9.11 plus 9.8?'".to_string(),
         },
     ]);
     
     // 注册自定义工具处理器
     mcp_client.register_tool_handler("get_weather".to_string(), |params: HashMap<String, Value>| async move {
-        let default_city = Value::String("上海".to_string());
+        let default_city = Value::String("Shanghai".to_string());
         let city_value = params.get("city").unwrap_or(&default_city);
-        let city = city_value.as_str().unwrap_or("上海");
+        let city = city_value.as_str().unwrap_or("Shanghai");
         Ok(json!({
             "city": city,
             "temperature": "25°C",
-            "weather": "晴",
+            "weather": "Sunny",
             "humidity": "40%",
             "updated_at": chrono::Utc::now().to_rfc3339()
         }))
     });
     
-    mcp_client.register_tool_handler("search_knowledge".to_string(), |params: HashMap<String, Value>| async move {
-        let default_query = Value::String("".to_string());
-        let query_value = params.get("query").unwrap_or(&default_query);
-        let query = query_value.as_str().unwrap_or("");
-        Ok(json!({
-            "query": query,
-            "results": [
-                format!("关于'{}'的详细信息1", query),
-                format!("关于'{}'的详细信息2", query)
-            ],
-            "source": "示例知识库"
-        }))
-    });
-    
     mcp_client.register_tool_handler("simple_calculate".to_string(), |params: HashMap<String, Value>| async move {
-        let expression_value = params.get("expression").ok_or_else(|| Error::msg("缺少计算表达式"))?;
-        let expression = expression_value.as_str().ok_or_else(|| Error::msg("表达式格式错误"))?;
+        let expression_value = params.get("expression").ok_or_else(|| Error::msg("Missing calculation expression"))?;
+        let expression = expression_value.as_str().ok_or_else(|| Error::msg("Expression format error"))?;
         
         // 解析表达式，提取操作数和运算符
         let result = parse_and_calculate(expression)?;
@@ -99,9 +81,9 @@ fn parse_and_calculate(expression: &str) -> Result<f64, Error> {
             
             // 转换为浮点数
             let left = left_str.parse::<f64>().map_err(|e| 
-                Error::msg(format!("左侧操作数格式错误: {}", e)))?;
+                Error::msg(format!("Left operand format error: {}", e)))?;
             let right = right_str.parse::<f64>().map_err(|e| 
-                Error::msg(format!("右侧操作数格式错误: {}", e)))?;
+                Error::msg(format!("Right operand format error: {}", e)))?;
             
             // 执行相应的运算
             let result = match *op_char {
@@ -126,43 +108,41 @@ fn parse_and_calculate(expression: &str) -> Result<f64, Error> {
         return Ok(number);
     }
     
-    Err(Error::msg(format!("无法解析表达式: {}", expression)))
+    Err(Error::msg(format!("Failed to parse expression: {}", expression)))
 }
     
     // 连接到 MCP 服务器
     if let Err(e) = mcp_client.connect(&mcp_url).await {
-        println!("MCP连接失败: {}", e);
-        println!("使用模拟工具继续...");
+        println!("Failed to connect to MCP server: {}", e);
+        println!("Using mock tools instead...");
     }
 
-    println!("使用模型: {}", model.model_name().unwrap_or("未指定"));
-    println!("使用API URL: {}", model.base_url());
+    println!("Using model: {}", model.model_name().unwrap_or("Model not specified"));
+    println!("Using API URL: {}", model.base_url());
     println!("----------------------------------------");
     
-    let mcp_client_arc: Arc<dyn McpClient> = match mcp_client.clone() {
-        boxed_client => boxed_client.into(),
-    };
+    let client_arc: Arc<dyn McpClient> = Arc::new(mcp_client);
     
     // 创建Agent实例，并传递temperature和max_tokens参数
     let mut agent = McpAgent::new(
-        mcp_client_arc.clone(),
+        client_arc.clone(),
         model.model_name().unwrap_or("kimi-k2-0905-preview").to_string(),
-        "你是一个AI助手，可以使用工具来回答用户问题。请根据用户需求决定是否使用工具。".to_string()
+        "You are an AI assistant that can use tools to answer user questions. Please decide whether to use tools based on the user's needs.".to_string()
     )
     .with_temperature(0.6f32)  // 使用与模型相同的温度设置，显式指定为f32类型
     .with_max_tokens(100*1024);  // 使用与模型相同的最大令牌数
     
     // 自动从MCP客户端获取工具并添加到Agent
     if let Err(e) = agent.auto_add_tools().await {
-        println!("自动添加工具到 McpAgent 失败: {}", e);
+        println!("Failed to auto add tools to McpAgent: {}", e);
     }
     
     println!("基于MCP的AI Agent聊天机器人已启动！");
     println!("输入'退出'结束对话");
     println!("----------------------------------------");
-    println!("使用工具示例：");
-    let tools = mcp_client.get_tools().await.unwrap_or_else(|e| {
-        println!("获取工具列表失败: {}", e);
+    println!("Using tools example:");
+    let tools = client_arc.get_tools().await.unwrap_or_else(|e| {
+        println!("Failed to get tools from MCP server: {}", e);
         vec![]
     });
     
@@ -195,7 +175,7 @@ fn parse_and_calculate(expression: &str) -> Result<f64, Error> {
                 println!("{}", response);
             },
             Err(e) => {
-                println!("发生错误: {}", e);
+                println!("Failed to run agent: {}", e);
             },
         }
         
@@ -203,7 +183,7 @@ fn parse_and_calculate(expression: &str) -> Result<f64, Error> {
     }
     
     // 断开MCP连接
-    if let Err(e) = mcp_client_arc.disconnect().await {
-        println!("MCP断开连接失败: {}", e);
+    if let Err(e) = client_arc.disconnect().await {
+        println!("Failed to disconnect MCP client: {}", e);
     }
 }

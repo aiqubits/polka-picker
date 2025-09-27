@@ -5,9 +5,10 @@ use anyhow::Error;
 use std::pin::Pin;
 use std::future::Future;
 use std::sync::Arc;
+use log::info;
 
 // MCP工具结构体
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct McpTool {
     pub name: String,
     pub description: String,
@@ -16,12 +17,23 @@ pub struct McpTool {
 
 // 简单的MCP客户端实现
 // 修改 SimpleMcpClient 结构体，添加工具处理器字段
+#[derive(Clone)]
 pub struct SimpleMcpClient {
     pub url: String,
     pub available_tools: Vec<McpTool>,
     // 使用Arc包装工具处理器，使其支持克隆
-    tool_handlers: HashMap<String, Arc<dyn Fn(HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<Value, Error>> + Send>> + Send + Sync>>,
+    pub tool_handlers: HashMap<String, Arc<dyn Fn(HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<Value, Error>> + Send>> + Send + Sync>>,
 }
+
+// impl std::fmt::Debug for SimpleMcpClient {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("SimpleMcpClient")
+//             .field("url", &self.url)
+//             .field("available_tools", &self.available_tools)
+//             .field("tool_handlers", &format!("HashMap with {} entries", self.tool_handlers.len()))
+//             .finish()
+//     }
+// }
 
 // 实现 SimpleMcpClient 结构体的方法
 impl SimpleMcpClient {
@@ -85,11 +97,15 @@ impl McpClient for SimpleMcpClient {
         let tool_name = tool_name.to_string();
         let params = params.clone();
         let handler_opt = self.tool_handlers.get(&tool_name).cloned();
-        
+        for (tool_name, _handler) in &self.tool_handlers {
+            // 我们只能打印键（工具名称），因为值是一个闭包类型
+            println!("- Tool: {}", tool_name);
+        }
         Box::pin(async move {
             // 检查是否有自定义的工具处理器
             if let Some(handler) = handler_opt {
                 // 如果有自定义处理器，调用它
+                info!("Calling tool {} with params {:?}", tool_name, params);
                 handler(params.clone()).await
             } else {
                 // 否则使用默认的处理逻辑
@@ -97,27 +113,17 @@ impl McpClient for SimpleMcpClient {
                 match tool_name.as_str() {
                     "get_weather" => {
                         // 绑定默认值到变量以延长生命周期
-                        let default_city = Value::String("北京".to_string());
+                        let default_city = Value::String("Beijing".to_string());
                         let city_value = params.get("city").unwrap_or(&default_city);
-                        let city = city_value.as_str().unwrap_or("北京");
+                        let city = city_value.as_str().unwrap_or("Beijing");
                         Ok(json!({
                             "city": city,
-                            "temperature": "45°C",
-                            "weather": "阴",
+                            "temperature": "25°C",
+                            "weather": "cloudy",
                             "humidity": "60%"
                         }))
                     },
-                    "search_knowledge" => {
-                        // 绑定默认值到变量以延长生命周期
-                        let default_query = Value::String("".to_string());
-                        let query_value = params.get("query").unwrap_or(&default_query);
-                        let query = query_value.as_str().unwrap_or("");
-                        Ok(json!({
-                            "query": query,
-                            "results": ["搜索结果1", "搜索结果2"]
-                        }))
-                    },
-                    _ => Err(Error::msg(format!("未知工具: {}", tool_name)))
+                    _ => Err(Error::msg(format!("Unknown tool: {}", tool_name)))
                 }
             }
         })

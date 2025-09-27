@@ -3,6 +3,8 @@
 use tauri::{Builder, Manager};
 use tauri_plugin_store::{StoreBuilder};
 use tauri_plugin_dialog::init as init_dialog_plugin;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 // 导入命令模块
 pub mod commands;
@@ -12,6 +14,7 @@ pub mod config;
 
 // 导入认证管理器
 use crate::utils::auth::AuthManager;
+use crate::commands::chatbot::ChatbotState;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -44,6 +47,10 @@ pub fn run() {
       // 创建并管理 AuthManager 实例
       let auth_manager = AuthManager::new(auth_store);
       app.manage(auth_manager);
+      
+      // 创建并管理 ChatbotState 实例
+      let chatbot_state = Arc::new(Mutex::new(ChatbotState::default()));
+      app.manage(chatbot_state);
       
       Ok(())
     })
@@ -85,7 +92,16 @@ pub fn run() {
       commands::task::run_task,
       commands::task::stop_task,
       commands::task::setup_env,
-      commands::task::delete_task
+      commands::task::delete_task,
+      
+      // 聊天机器人相关命令
+      commands::chatbot::init_chatbot,
+      commands::chatbot::create_chat_session,
+      commands::chatbot::send_chat_message,
+      commands::chatbot::list_chat_sessions,
+      commands::chatbot::get_chat_session,
+      commands::chatbot::delete_chat_session,
+      commands::chatbot::get_available_tools
     ))
     // 运行应用
     .run(tauri::generate_context!())

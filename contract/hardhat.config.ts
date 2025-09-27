@@ -30,16 +30,29 @@ const config: HardhatUserConfig = {
       type: "edr-simulated",
       chainType: "op",
     },
-    sepolia: {
+    customize: {
       type: "http",
       chainType: "l1",
       url: configVariable("SEPOLIA_RPC_URL"),
       accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
     },
   },
+  chainDescriptors: {
+    71: {
+      name: "Conflux",
+      chainType: "l1",
+      blockExplorers: {
+        etherscan: {
+          name: "Conflux Explorer",
+          url: "https://evmtestnet.confluxscan.org",
+          apiUrl: "https://evmapi-testnet.confluxscan.org",
+        },
+      },
+    },
+  },
   verify:{
     etherscan: {
-      apiKey: configVariable("ETHERSCAN_API_KEY"),
+      apiKey: "234234234324234234",
     }
   }
 };
