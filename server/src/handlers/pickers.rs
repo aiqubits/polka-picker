@@ -1,8 +1,10 @@
+use std::env;
 use axum::{
     extract::{Query, State, Path, Multipart},
     response::Json,
     Extension,
 };
+use futures_util::StreamExt;
 
 // #[cfg(test)]
 // use axum_test::TestServer;
@@ -98,6 +100,7 @@ pub async fn upload_picker(
     Extension(user_id): Extension<Uuid>,
     mut multipart: Multipart,
 ) -> Result<Json<UploadPickerResponse>, AppError> {
+    println!("user_id: {}", user_id);
     // 验证用户是否为开发者
     let user = sqlx::query_as::<_, User>(
         "SELECT * FROM users WHERE user_id = ?",
@@ -121,7 +124,7 @@ pub async fn upload_picker(
     // 处理multipart数据
     while let Some(field) = multipart.next_field().await.map_err(|_| AppError::BadRequest("Invalid multipart data".to_string()))? {
         let name = field.name().unwrap_or("").to_string();
-        
+        println!("name: {}", name);
         match name.as_str() {
             "alias" => {
                 alias = field.text().await.map_err(|_| AppError::BadRequest("Invalid alias".to_string()))?;
@@ -137,40 +140,66 @@ pub async fn upload_picker(
                 version = field.text().await.map_err(|_| AppError::BadRequest("Invalid version".to_string()))?;
             }
             "image" => {
-                let filename = field.file_name().unwrap_or("image.jpg").to_string();
+                let filename = field.file_name().unwrap_or("picker_white.jpg").to_string();
                 let data = field.bytes().await.map_err(|_| AppError::BadRequest("Invalid image data".to_string()))?;
-                
                 // 创建上传目录
-                tokio::fs::create_dir_all("uploads/images").await.map_err(|_| AppError::InternalServerError)?;
-                
+                tokio::fs::create_dir_all("uploads/images").await.map_err(|e| {
+                    AppError::InternalServerError(format!("Failed to create uploads/images directory: {:?}", e))
+                })?;
                 // 生成唯一文件名
-                let unique_filename = format!("{}_{}", Uuid::new_v4(), filename);
-                image_path = format!("uploads/images/{}", unique_filename);
-                
+                let unique_filename = format!("{}_{}", filename, Uuid::new_v4());
+                image_path = format!("uploads/images/{}.jpg", unique_filename);
                 // 保存图片文件
-                tokio::fs::write(&image_path, data).await.map_err(|_| AppError::InternalServerError)?;
+                tokio::fs::write(&image_path, data).await.map_err(|e| {
+                    AppError::InternalServerError(format!("Failed to save image file: {:?}", e))
+                })?;
+                image_path = format!("http://localhost:3000/{}", image_path);
             }
             "file" => {
                 let filename = field.file_name().unwrap_or("picker_unknown.exe").to_string();
-                let data = field.bytes().await.map_err(|_| AppError::BadRequest("Invalid file data".to_string()))?;
+                // let data = field.bytes().await.map_err(|_| AppError::BadRequest("Invalid file data".to_string()))?;
                 
                 // 创建上传目录
-                tokio::fs::create_dir_all("uploads/files").await.map_err(|_| AppError::InternalServerError)?;
+                tokio::fs::create_dir_all("uploads/files").await.map_err(|e| {
+                    AppError::InternalServerError(format!("Failed to create uploads/files directory: {:?}", e))
+                })?;
                 
                 // 生成唯一文件名
-                let unique_filename = format!("{}_{}", Uuid::new_v4(), filename);
+                let unique_filename = format!("{}_{}", filename, Uuid::new_v4());
                 file_path = format!("uploads/files/{}", unique_filename);
                 
-                // 保存文件
-                tokio::fs::write(&file_path, data).await.map_err(|_| AppError::InternalServerError)?;
-            }
+                // 保存文件 - 流式写入
+                let mut file = tokio::fs::File::create(&file_path).await.map_err(|e| {
+                    AppError::InternalServerError(format!("Failed to create file: {:?}", e))
+                })?;
+                
+                let mut stream = field;
+                let mut _total_bytes_written = 0;
+                
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk.map_err(|e| {
+                        AppError::BadRequest(format!("Invalid file data: {:?}", e))
+                    })?;
+                    
+                    _total_bytes_written += chunk.len();
+                    
+                    tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await.map_err(|e| {
+                        AppError::InternalServerError(format!("Failed to write to file: {:?}", e))
+                    })?;
+                }
+                            }
             _ => {}
         }
     }
 
     // 验证必填字段
-    if alias.is_empty() || description.is_empty() || version.is_empty() || image_path.is_empty() || file_path.is_empty() {
+    if alias.is_empty() || description.is_empty() || version.is_empty() || file_path.is_empty() {
         return Err(AppError::BadRequest("Missing required fields".to_string()));
+    }
+
+    // 单独处理 image 为空情况
+    if image_path.is_empty() {
+        image_path = "picker_white.jpg".to_string(); // 提供默认值
     }
 
     // 创建Picker记录
@@ -195,7 +224,7 @@ pub async fn upload_picker(
     .bind(now.to_rfc3339())
     .execute(&state.db)
     .await
-    .map_err(|_| AppError::DatabaseError)?;
+    .map_err(|e| AppError::DatabaseError(format!("Failed to insert picker: {:?}", e)))?;
 
     Ok(Json(UploadPickerResponse {
         picker_id,
@@ -242,7 +271,7 @@ pub async fn get_market(
         .bind(&search_pattern)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError)?;
+        .map_err(|e| AppError::DatabaseError(format!("Failed to get market total: {:?}", e)))?;
 
         // 获取Picker列表
         let pickers: Vec<Picker> = sqlx::query_as(
@@ -254,7 +283,7 @@ pub async fn get_market(
         .bind(offset as i64)
         .fetch_all(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError)?;
+        .map_err(|e| AppError::DatabaseError(format!("Failed to get market pickers: {:?}", e)))?;
 
         (pickers, total.0)
     } else {
@@ -264,7 +293,7 @@ pub async fn get_market(
         )
         .fetch_one(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError)?;
+        .map_err(|e| AppError::DatabaseError(format!("Failed to get market total: {:?}", e)))?;
 
         // 获取Picker列表
         let pickers: Vec<Picker> = sqlx::query_as(
@@ -274,7 +303,7 @@ pub async fn get_market(
         .bind(offset as i64)
         .fetch_all(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError)?;
+        .map_err(|e| AppError::DatabaseError(format!("Failed to get market pickers: {:?}", e)))?;
 
         (pickers, total.0)
     };
@@ -325,7 +354,7 @@ pub async fn get_picker_detail(
     .bind(picker_id)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| AppError::DatabaseError)?
+    .map_err(|e| AppError::DatabaseError(format!("Failed to get picker detail: {:?}", e)))?
     .ok_or_else(|| AppError::NotFound("Picker not found".to_string()))?;
 
     Ok(Json(PickerInfo {
@@ -341,6 +370,106 @@ pub async fn get_picker_detail(
         updated_at: picker.updated_at,
         status: picker.status,
     }))
+}
+
+// 删除Picker
+#[utoipa::path(
+    delete,
+    path = "/api/pickers/{picker_id}",
+    tag = "pickers",
+    summary = "Delete a Picker",
+    description = "Developer deletes their own Picker",
+    security(
+        ("bearer_auth" = [])
+    ),
+    params(
+        ("picker_id" = uuid::Uuid, Path, description = "Picker's unique identifier")
+    ),
+    responses(
+        (status = 200, description = "Delete successful", body = String),
+        (status = 400, description = "Bad request or unauthorized deletion", body = crate::openapi::ErrorResponse),
+        (status = 401, description = "Unauthorized access", body = crate::openapi::ErrorResponse),
+        (status = 404, description = "Picker not found", body = crate::openapi::ErrorResponse),
+        (status = 500, description = "Internal server error", body = crate::openapi::ErrorResponse)
+    )
+)]
+pub async fn delete_picker(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<Uuid>,
+    Path(picker_id): Path<Uuid>,
+) -> Result<String, AppError> {
+    // 验证用户是否为开发者
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE user_id = ?",
+    )
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| AppError::NotFound("User not found".to_string()))?;
+
+    if user.user_type != UserType::Dev {
+        return Err(AppError::BadRequest("Only developers can delete pickers".to_string()));
+    }
+
+    // 获取Picker信息，验证是否存在且属于当前开发者
+    let picker = sqlx::query_as::<_, Picker>(
+        "SELECT * FROM pickers WHERE picker_id = ? AND dev_user_id = ?",
+    )
+    .bind(picker_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::DatabaseError(format!("Failed to get picker detail: {:?}", e)))?
+    .ok_or_else(|| AppError::NotFound("Picker not found or you don't have permission to delete it".to_string()))?;
+
+    // 处理相关文件删除
+    let current_dir = env::current_dir().map_err(|e| AppError::InternalServerError(format!("Failed to get current directory: {:?}", e)))?;
+    // 删除图片文件
+    if !picker.image_path.is_empty() && picker.image_path != "picker_white.jpg" {
+        // 从URL中提取文件路径（去掉http://localhost:3000/前缀）
+        let image_file_path = if picker.image_path.starts_with("http://localhost:3000/") {
+            picker.image_path.trim_start_matches("http://localhost:3000/").to_string()
+        } else {
+            picker.image_path.clone()
+        };
+
+        // 构建图片在当前主机上的绝对路径
+        let full_image_path = format!("{}/{}", current_dir.display(), image_file_path); 
+               
+        // 尝试删除图片文件，忽略删除失败的情况（文件可能不存在）
+        if tokio::fs::try_exists(&full_image_path).await.map_err(|e| AppError::InternalServerError(format!("Failed to check image file existence: {:?}", e)))? {
+            // 打印删除图片文件的路径
+            println!("Deleting image file: {}", full_image_path);
+            let _ = tokio::fs::remove_file(&full_image_path).await;
+        }
+    }
+
+    // 删除Picker文件
+    if !picker.file_path.is_empty() {
+        let full_file_path = format!("{}/{}", current_dir.display(), picker.file_path); 
+
+        // 尝试删除文件，忽略删除失败的情况（文件可能不存在）
+        if tokio::fs::try_exists(&full_file_path).await.map_err(|e| AppError::InternalServerError(format!("Failed to check file existence: {:?}", e)))? {
+            // 打印删除文件的路径
+            println!("Deleting file: {}", full_file_path);
+            let _ = tokio::fs::remove_file(&full_file_path).await;
+        }
+    }
+
+    // 软删除Picker（更新状态为inactive）
+    sqlx::query(
+        "UPDATE pickers SET status = 'inactive', updated_at = ? WHERE picker_id = ?",
+    )
+    .bind(Utc::now().to_rfc3339())
+    .bind(picker_id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| AppError::DatabaseError(format!("Failed to soft delete picker: {:?}", e)))?;
+
+    // 处理相关的订单信息（如果需要）
+    // 这里可以添加代码来处理与该picker相关的订单状态
+
+    Ok("Picker and related resources deleted successfully!".to_string())
 }
 
 #[cfg(test)]

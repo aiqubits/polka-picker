@@ -223,10 +223,36 @@
   border-top: 1px solid var(--border);
 }
 
+.input-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.api-settings-btn {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  width: 150px;
+}
+
+.api-settings-btn:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--primary);
+}
+
 .chat-input-container {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex: 1;
+  max-width: calc(100% - 150px); /* 与上方对话框保持一致 */
 }
 
 .chat-input {
@@ -328,7 +354,115 @@
   }
 }
 
-/* Responsive adjustments */
+/* 自定义对话框样式 */
+.custom-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.custom-dialog {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.custom-dialog-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.custom-dialog-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.custom-dialog-body {
+  padding: 20px;
+}
+
+.custom-dialog-message {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.custom-dialog-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.custom-dialog-button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  min-width: 80px;
+  background-color: var(--primary);
+  color: white;
+}
+
+.custom-dialog-button:hover {
+  background-color: var(--primary-hover);
+}
+
+/* API 设置表单样式 */
+.api-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.form-input {
+  padding: 10px 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.form-input:focus {
+  border-color: var(--primary);
+}
+
+.form-input::placeholder {
+  color: var(--text-secondary);
+}
 @media (max-width: 1024px) {
   .sessions-sidebar {
     width: 180px;

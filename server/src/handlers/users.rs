@@ -8,8 +8,12 @@ use jsonwebtoken::{encode, Header, EncodingKey};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use tracing::info;
+use tracing::{info, error};
 use uuid::Uuid;
+use std::str::FromStr;
+
+use alloy::primitives::{Address, U256, Uint};
+use alloy::providers::{Provider, ProviderBuilder};
 
 use crate::config::{AppState, Claims, PendingRegistration};
 use crate::models::{User, UserType, VerificationCode};
@@ -59,6 +63,17 @@ pub struct LoginResponse {
     pub user: UserInfo,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ReplacePrivateKeyRequest {
+    pub old_wallet_address: String,
+    pub new_private_key: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ReplacePrivateKeyResponse {
+    pub message: String,
+}
+
 // 用户信息
 #[derive(Debug, Serialize, ToSchema)]
 pub struct UserInfo {
@@ -90,6 +105,7 @@ impl From<User> for UserInfo {
 pub struct SystemInfoResponse {
     pub chain_name: String,
     pub chain_url: String,
+    pub explorer_url: String,
     pub premium_payment_rate: i64,
     pub premium_to_usd: i64,
     pub premium_free: i64,
@@ -115,6 +131,7 @@ pub async fn get_system_info(
     let system_info = SystemInfoResponse {
         chain_name: state.blockchain_name,
         chain_url: state.blockchain_rpc_url,
+        explorer_url: state.blockchain_explorer_url,
         premium_payment_rate: state.premium_payment_rate,
         premium_to_usd: state.premium_to_usd,
         premium_free: state.premium_free,
@@ -154,7 +171,7 @@ pub async fn register(
     .bind(&payload.email)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| AppError::DatabaseError)?;
+    .map_err(|e| AppError::DatabaseError(format!("Database error: {:?}", e)))?;
 
     if existing_user.is_some() {
         return Err(AppError::UnprocessableEntity("Email already registered".to_string()));
@@ -260,7 +277,7 @@ pub async fn verify(
 
     // 验证通过，开始创建用户
     // 生成钱包地址和私钥
-    let (private_key, wallet_address) = generate_wallet(&state.password_master_key, &state.password_nonce);
+    let (private_key, wallet_address) = generate_wallet(None, &state.password_master_key, &state.password_nonce)?;
     
     // 创建用户
     let user_id = Uuid::new_v4();
@@ -288,7 +305,7 @@ pub async fn verify(
     .bind(now.to_rfc3339())
     .execute(&state.db)
     .await
-    .map_err(|_| AppError::DatabaseError)?;
+    .map_err(|e| AppError::DatabaseError(format!("Database error: {:?}", e)))?;
 
     // 获取创建的用户信息
     let user = sqlx::query_as::<_, User>(
@@ -297,7 +314,7 @@ pub async fn verify(
     .bind(user_id)
     .fetch_one(&state.db)
     .await
-    .map_err(|_| AppError::DatabaseError)?;
+    .map_err(|e| AppError::DatabaseError(format!("Database error: {:?}", e)))?;
 
     // 生成JWT token
     let claims = Claims::new(user.user_id);
@@ -306,7 +323,7 @@ pub async fn verify(
         &claims,
         &EncodingKey::from_secret(state.jwt_secret.as_ref()),
     )
-    .map_err(|_| AppError::InternalServerError)?;
+    .map_err(|e| AppError::InternalServerError(format!("JWT encoding error: {:?}", e)))?;
 
     // 清理临时数据
     state.verification_codes.lock().unwrap().remove(&payload.email);
@@ -344,7 +361,7 @@ pub async fn login(
     .bind(&payload.email)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| AppError::DatabaseError)?;
+    .map_err(|e| AppError::DatabaseError(format!("Database error: {:?}", e)))?;
 
     let user = user.ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
 
@@ -360,7 +377,7 @@ pub async fn login(
         &claims,
         &EncodingKey::from_secret(state.jwt_secret.as_ref()),
     )
-    .map_err(|_| AppError::InternalServerError)?;
+    .map_err(|e| AppError::InternalServerError(format!("JWT encoding error: {:?}", e)))?;
     info!("User Login Over: {:?}", user);
     Ok(Json(LoginResponse {
         token,
@@ -403,6 +420,192 @@ pub async fn get_profile(
 fn generate_verification_code() -> String {
     let mut rng = rand::rng();
     format!("{:06}", rng.random_range(100000..999999))
+}
+
+// 替换钱包私钥 replace_private_key
+#[utoipa::path(
+    post,
+    path = "/api/users/replace-private-key",
+    tag = "users",
+    summary = "Replace user private key",
+    description = "Replace the private key of the current logged-in user",
+    security(
+        ("bearer_auth" = [])
+    ),
+    request_body = ReplacePrivateKeyRequest,
+    responses(
+        (status = 200, description = "Replace private key successful", body = ReplacePrivateKeyResponse),
+        (status = 401, description = "Unauthorized access", body = crate::openapi::ErrorResponse),
+        (status = 404, description = "User not found", body = crate::openapi::ErrorResponse)
+    )
+)]
+pub async fn replace_private_key(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<Uuid>,
+    Json(payload): Json<ReplacePrivateKeyRequest>,
+) -> Result<Json<ReplacePrivateKeyResponse>, AppError> {
+    println!("Replace Private Key Begin: {:?}", payload);
+    // 检查用户是否存在
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE user_id = ?",
+    )
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| AppError::NotFound("User not found".to_string()))?;
+
+    // 验证旧钱包地址是否匹配
+    if user.wallet_address != payload.old_wallet_address {
+        return Err(AppError::Unauthorized("Old wallet address incorrect".to_string()));
+    }
+
+    // 检查旧钱包是否有余额，如果存在余额返回错误，提示用户先转账
+    let rpc_url = state.blockchain_rpc_url.parse().map_err(|e| {
+        error!("Invalid RPC URL: {}", e);
+        AppError::InternalServerError(format!("Invalid RPC URL: {:?}", e))
+    })?;
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+    let address = Address::from_str(&user.wallet_address).map_err(|e| {
+        error!("Invalid wallet address format: {} - {}", user.wallet_address, e);
+        AppError::BadRequest("Invalid wallet address format".to_string())
+    })?;
+    let balance = provider.get_balance(address).await.map_err(|e| {
+        error!("Failed to get wallet balance: {}", e);
+        AppError::InternalServerError(format!("Failed to get wallet balance: {:?}", e))
+    })?;
+
+    // 计算Gas费用 (21000 gas limit * 20 gwei gas price)
+    let gas_price = Uint::from(20u64) * Uint::from(1e9 as u64); // 20 gwei in wei
+    let gas_limit = Uint::from(21000u64);
+    let gas_cost = gas_price * gas_limit;
+
+    if balance > gas_cost {
+        return Err(AppError::BadRequest("Old wallet address has balance, please transfer first".to_string()));
+    }
+
+    // 生成 EVM 钱包地址和新私钥密文
+    let (encrypted_pk, wallet_address) = generate_wallet(Some(&payload.new_private_key), &state.password_master_key, &state.password_nonce)?;
+    
+    // 更新用户钱包地址和私钥密文
+    sqlx::query(
+        "UPDATE users SET wallet_address = ?, private_key = ? WHERE user_id = ?",
+    )
+    .bind(wallet_address)
+    .bind(encrypted_pk)
+    .bind(user_id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| AppError::DatabaseError(format!("Database error: {:?}", e)))?;
+
+    Ok(Json(ReplacePrivateKeyResponse {
+        message: "Private key replaced successfully".to_string(),
+    }))
+}  
+
+
+// 实现 transfer_to 服务端解密私钥进行转账
+#[derive(Deserialize, ToSchema)]
+pub struct TransferToRequest {
+    pub to_address: String,
+    pub amount: String, // 使用字符串格式的 wei 值
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct TransferToResponse {
+    pub success: bool,
+    pub tx_hash_url: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/users/transfer-to",
+    tag = "users",
+    summary = "Transfer funds from user to another address",
+    description = "Transfer ETH from the user's wallet to another address",
+    request_body = TransferToRequest,
+    responses(
+        (status = 200, description = "Transfer successful", body = TransferToResponse),
+        (status = 400, description = "Bad request", body = crate::openapi::ErrorResponse),
+        (status = 500, description = "Internal server error", body = crate::openapi::ErrorResponse),
+    )
+)]
+pub async fn transfer_to(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<Uuid>,
+    axum::Json(payload): axum::Json<TransferToRequest>,
+) -> Result<axum::Json<TransferToResponse>, AppError> {
+    // 从数据库查询用户信息，获取加密的私钥
+    let user = sqlx::query_as::<_, crate::models::User>(
+        "SELECT * FROM users WHERE user_id = ?",
+    )
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to fetch user from database: {:?}", e);
+        AppError::NotFound("User not found".to_string())
+    })?;
+
+    // // 检查 user 是否为 Dev 用户
+    // if user.user_type != crate::models::UserType::Dev {
+    //     return Err(AppError::BadRequest("Only Developer can transfer funds".to_string()));
+    // }
+
+    // 解密用户私钥
+    let private_key_plaintext = crate::utils::decrypt_private_key(
+        &user.private_key,
+        &state.password_master_key,
+        &state.password_nonce,
+    )
+    .map_err(|e| {
+        tracing::error!("Decryption to plaintext failed: {:?}", e);
+        AppError::InternalServerError(format!("Decryption to plaintext failed: {:?}", e))
+    })?;
+
+    // 初始化签名器（使用用户的私钥明文）
+    let user_signer: alloy::signers::local::PrivateKeySigner = private_key_plaintext.parse().map_err(|e| {
+        tracing::error!("Invalid private key: {}", e);
+        AppError::InternalServerError(format!("Invalid private key: {:?}", e))
+    })?;
+
+    // 初始化provider
+    let provider = ProviderBuilder::new().wallet(user_signer).connect_http(
+        state.blockchain_rpc_url.parse().map_err(|e| {
+            tracing::error!("Invalid RPC URL: {}", e);
+            AppError::InternalServerError(format!("Invalid RPC URL: {:?}", e))
+        })?,
+    );
+    println!("provider: {:?}", provider);
+    // 解析目标地址参数
+    let to_address: Address = payload.to_address.parse()
+        .map_err(|_| AppError::BadRequest("Invalid recipient address format".to_string()))?;
+    println!("to_address: {:?}", payload.to_address);
+    println!("amount: {:?}", payload.amount);
+    // 解析金额参数
+    let amount: U256 = U256::from_str(&payload.amount)
+        .map_err(|_| AppError::BadRequest("Invalid amount format".to_string()))?;
+    
+    // 构建并发送交易
+    let pending_tx = provider
+        .send_transaction(alloy::rpc::types::TransactionRequest {
+            to: Some(to_address.into()),
+            value: Some(amount),
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to send transaction: {}", e);
+            AppError::InternalServerError(format!("Failed to send transaction: {:?}", e))
+        })?;
+        println!("pending_tx: {:?}", pending_tx);
+    // 获取交易哈希字符串
+    let tx_hash = format!("0x{}", hex::encode(pending_tx.tx_hash()));
+    let tx_hash_url = format!("{}/tx/{}", state.blockchain_explorer_url, tx_hash);
+    println!("tx_hash_url: {:?}", tx_hash_url);
+    Ok(axum::Json(TransferToResponse { 
+        success: true,
+        tx_hash_url,
+    }))
 }
 
 #[cfg(test)]

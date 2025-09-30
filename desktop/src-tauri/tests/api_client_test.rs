@@ -23,6 +23,9 @@ async fn test_download_successful() {
         api_base_url: server.url(),
         request_timeout_ms: 30000,
         max_retries: 3,
+        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+        ai_model: "gpt-3.5-turbo".to_string(),
     };
 
     // 创建API客户端
@@ -55,6 +58,9 @@ async fn test_download_server_error() {
         api_base_url: server.url(),
         request_timeout_ms: 30000,
         max_retries: 1,
+        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+        ai_model: "gpt-3.5-turbo".to_string(),
     };
 
     // 创建API客户端
@@ -91,6 +97,9 @@ async fn test_download_timeout_retry() {
         api_base_url: server.url(),
         request_timeout_ms: 2000, // 2000毫秒超时
         max_retries: 1,
+        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+        ai_model: "gpt-3.5-turbo".to_string(),
     };
     
     // 验证max_retries确实被设置为1
@@ -129,6 +138,9 @@ async fn test_upload_file_successful() {
         api_base_url: server.url(),
         request_timeout_ms: 30000,
         max_retries: 3,
+        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+        ai_model: "gpt-3.5-turbo".to_string(),
     };
 
     // 创建API客户端
@@ -175,6 +187,9 @@ async fn test_upload_file_without_image() {
         api_base_url: server.url(),
         request_timeout_ms: 30000,
         max_retries: 3,
+        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+        ai_model: "gpt-3.5-turbo".to_string(),
     };
 
     // 创建API客户端
@@ -219,6 +234,9 @@ async fn test_upload_file_server_error() {
         api_base_url: server.url(),
         request_timeout_ms: 30000,
         max_retries: 1,
+        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+        ai_model: "gpt-3.5-turbo".to_string(),
     };
 
     // 创建API客户端
@@ -268,6 +286,9 @@ async fn test_upload_file_timeout_retry() {
         api_base_url: server.url(),
         request_timeout_ms: 2000, // 2000毫秒超时
         max_retries: 1,
+        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+        ai_model: "gpt-3.5-turbo".to_string(),
     };
     
     // 验证max_retries确实被设置为1

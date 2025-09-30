@@ -61,17 +61,39 @@
 }
 
 /* 日志头部 */
+/* 更新log-header样式 */
 .log-header {
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border);
-  background-color: var(--bg-secondary);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  position: relative; /* 确保绝对定位的元素基于此容器 */
+  padding: 8px 12px;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #444;
+  min-height: 40px; /* 确保有足够的高度 */
+}
+
+/* 添加绝对居中的标题样式 */
+.log-header-title.absolute-centered {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 右侧控件容器 */
+.log-controls-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 确保log-filters不会占用过多空间 */
+.log-filters {
+  margin: 0;
 }
 
 .log-header-left {
@@ -280,7 +302,7 @@
   text-transform: uppercase;
   font-size: 10px;
   flex-shrink: 0;
-  min-width: 50px;
+  min-width: 10px;
   text-align: center;
   border-radius: 2px;
   padding: 0 4px;
@@ -313,7 +335,7 @@
   font-size: 10px;
   font-style: italic;
   flex-shrink: 0;
-  min-width: 120px;
+  min-width: 50px;
 }
 
 .log-prefix {

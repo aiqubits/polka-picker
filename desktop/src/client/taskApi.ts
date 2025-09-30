@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+// 确保正确导入Tauri API
 
 // 数据类型定义
 export interface TaskConfig {
@@ -25,8 +26,8 @@ export interface EnvConfig {
   environment: Map<string, ConfigValue>;
 }
 
-// 日志类型定义 'error' | 'warning' | 'info'
-export type LogLevel = 'error' | 'warning' | 'info';
+// 日志类型定义 'error' | 'warn' | 'info'
+export type LogLevel = 'error' | 'warn' | 'info';
 
 export interface TaskLog {
   task_id: string;
@@ -128,15 +129,11 @@ class TaskAPIService {
   // 刷新任务并通知监听器
   private async refreshAndNotify(): Promise<void> {
     try {
-      console.log('TaskAPI: Refreshing tasks...');
       const tasks = await this.listTasks();
       const hasChanges = JSON.stringify(tasks) !== JSON.stringify(this.lastTasksCache);
-      
-      console.log('TaskAPI: Tasks refreshed, hasChanges:', hasChanges, 'tasks count:', tasks.length);
-      
+            
       if (hasChanges) {
         this.lastTasksCache = tasks;
-        console.log('TaskAPI: Notifying', this.statusListeners.size, 'listeners');
         this.statusListeners.forEach(listener => {
           try {
             listener(tasks);
@@ -155,7 +152,6 @@ class TaskAPIService {
     if (this.isPolling) return;
     
     this.isPolling = true;
-    console.log('Starting task status polling...');
     
     this.pollingInterval = window.setInterval(async () => {
       // 只有当有运行中的任务时才频繁轮询
@@ -166,7 +162,6 @@ class TaskAPIService {
       console.log('TaskAPI: Polling check - hasRunningTasks:', hasRunningTasks, 'cached tasks:', this.lastTasksCache.length);
       
       if (hasRunningTasks || this.lastTasksCache.length === 0) {
-        console.log('TaskAPI: Polling - refreshing tasks');
         await this.refreshAndNotify();
       }
     }, 3000); // 3秒轮询一次
@@ -178,20 +173,16 @@ class TaskAPIService {
       window.clearInterval(this.pollingInterval);
       this.pollingInterval = null;
       this.isPolling = false;
-      console.log('Task status polling stopped');
     }
   }
 
   // 注册状态监听器
   async addStatusListener(listener: (tasks: TaskConfig[]) => void): Promise<void> {
-    console.log('TaskAPI: Adding status listener');
     await this.initializeStatusListener();
     this.statusListeners.add(listener);
-    console.log('TaskAPI: Status listener added, total listeners:', this.statusListeners.size);
-    
+      
     // 如果有缓存数据，立即调用一次
     if (this.lastTasksCache.length > 0) {
-      console.log('TaskAPI: Calling listener with cached data:', this.lastTasksCache.length, 'tasks');
       listener(this.lastTasksCache);
     }
   }
@@ -212,7 +203,7 @@ class TaskAPIService {
     try {
       // 调用 Tauri 后端的 list_tasks 命令
       const tasks = await invoke<TaskConfig[]>('list_tasks');
-      console.log('listTasks', tasks);
+
       return tasks;
     } catch (error) {
       const errorMessage = error instanceof Error ? 
@@ -229,7 +220,10 @@ class TaskAPIService {
         name,
         pickerPath
       });
-      console.log('createTask', task);
+      
+      // 立即刷新状态，不依赖事件
+      setTimeout(() => this.refreshAndNotify(), 500);
+      
       return task;
     } catch (error) {
       const errorMessage = error instanceof Error ? 
@@ -283,6 +277,9 @@ class TaskAPIService {
         taskId,
         deleteFile
       });
+
+      // 立即刷新状态，不依赖事件
+      setTimeout(() => this.refreshAndNotify(), 500);
     } catch (error) {
       const errorMessage = error instanceof Error ? 
         (error.message || 'Failed to delete task.') : 

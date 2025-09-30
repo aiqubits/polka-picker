@@ -6,6 +6,7 @@ use crate::utils::auth::AuthManager;
 use reqwest::{Client as ReqwestClient, RequestBuilder, multipart::Form};
 use std::collections::HashMap;
 use std::time::Duration;
+use std::u64;
 
 pub struct ApiClient {
     base_url: String,
@@ -32,7 +33,7 @@ impl ApiClient {
     pub async fn post<T, U>(&self, path: &str, body: &T) -> Result<U, ApiError>
     where
         T: serde::Serialize,
-        U: serde::de::DeserializeOwned,
+        U: serde::de::DeserializeOwned + 'static,
     {
         let url = format!("{}{}", self.base_url, path);
         let mut request_builder = self.client.post(&url).json(body);
@@ -49,7 +50,7 @@ impl ApiClient {
     
     pub async fn get<U>(&self, path: &str, params: Option<&HashMap<&str, &str>>) -> Result<U, ApiError>
     where
-        U: serde::de::DeserializeOwned,
+        U: serde::de::DeserializeOwned + 'static,
     {
         let url = format!("{}{}", self.base_url, path);
         let mut request_builder = self.client.get(&url);
@@ -72,10 +73,13 @@ impl ApiClient {
         
         self.execute_request(request_builder).await
     }
-    
-    pub async fn download(&self, path: &str, token: &str) -> Result<Vec<u8>, ApiError> {
-        let url = format!("{}{}?token={}", self.base_url, path, token);
-        let mut request_builder = self.client.get(&url);
+
+    pub async fn delete<U>(&self, path: &str) -> Result<U, ApiError>
+    where
+        U: serde::de::DeserializeOwned + 'static,
+    {
+        let url = format!("{}{}", self.base_url, path);
+        let mut request_builder = self.client.delete(&url);
         
         // 添加认证头
         if let Some(auth_manager) = &self.auth_manager {
@@ -84,6 +88,18 @@ impl ApiClient {
             }
         }
         
+        // 复用execute_request方法
+        self.execute_request(request_builder).await
+    }
+    
+    /// 下载文件方法
+    pub async fn download(&self, path: &str, token: &str) -> Result<Vec<u8>, ApiError> {
+        let url = format!("{}{}", self.base_url, path);
+        let request_builder = self.client
+            .get(&url)
+            .query(&[("token", token)]);
+        
+        // 对于下载请求，我们需要特殊处理响应
         let mut retries = 0;
         
         // 尝试克隆请求构建器，如果失败则只能尝试一次（不重试）
@@ -91,27 +107,30 @@ impl ApiClient {
             loop {
                 match cloned_builder.send().await {
                     Ok(response) => {
-                        if response.status().is_success() {
-                            match response.bytes().await {
-                                Ok(bytes) => return Ok(bytes.to_vec()),
-                                Err(err) => return Err(ApiError::NetworkError(err.into())),
-                            }
+                        let status = response.status();
+                        
+                        if status.is_success() {
+                            // 对于下载请求，我们直接返回字节数据
+                            return response.bytes().await
+                                .map(|bytes| bytes.to_vec())
+                                .map_err(|e| ApiError::NetworkError(e.into()));
                         } else {
-                            // 检查是否是可重试的状态码
-                            let status = response.status();
-                            if retries < self.max_retries && 
-                               (status == reqwest::StatusCode::SERVICE_UNAVAILABLE || 
-                                status == reqwest::StatusCode::TOO_MANY_REQUESTS || 
-                                status == reqwest::StatusCode::GATEWAY_TIMEOUT) {
+                            let err = Self::handle_error_response(response).await;
+                            // 检查是否应该重试
+                            if retries < self.max_retries && Self::should_retry_on_error_status(status) {
                                 retries += 1;
                                 // 重新克隆请求构建器以进行下一次尝试
                                 if let Some(new_builder) = request_builder.try_clone() {
                                     cloned_builder = new_builder;
-                                    tokio::time::sleep(Duration::from_millis(1000 * retries as u64)).await;
+                                    // 使用指数退避算法
+                                    let delay = Duration::from_millis(1000 * 2u64.pow(retries as u32 - 1));
+                                    tokio::time::sleep(delay).await;
                                     continue;
                                 }
+                                // 如果无法克隆，就不再重试
+                                return Err(err);
                             }
-                            return Err(Self::handle_error_response(response).await);
+                            return Err(err);
                         }
                     },
                     Err(err) => {
@@ -121,7 +140,9 @@ impl ApiClient {
                             // 重新克隆请求构建器以进行下一次尝试
                             if let Some(new_builder) = request_builder.try_clone() {
                                 cloned_builder = new_builder;
-                                tokio::time::sleep(Duration::from_millis(1000 * retries as u64)).await;
+                                // 使用指数退避算法
+                                let delay = Duration::from_millis(1000 * 2u64.pow(retries as u32 - 1));
+                                tokio::time::sleep(delay).await;
                                 continue;
                             }
                             // 如果无法克隆，就不再重试
@@ -135,11 +156,13 @@ impl ApiClient {
             // 如果无法克隆请求构建器，就只尝试一次
             match request_builder.send().await {
                 Ok(response) => {
-                    if response.status().is_success() {
-                        match response.bytes().await {
-                            Ok(bytes) => return Ok(bytes.to_vec()),
-                            Err(err) => return Err(ApiError::NetworkError(err.into())),
-                        }
+                    let status = response.status();
+                    
+                    if status.is_success() {
+                        // 对于下载请求，我们直接返回字节数据
+                        return response.bytes().await
+                            .map(|bytes| bytes.to_vec())
+                            .map_err(|e| ApiError::NetworkError(e.into()));
                     } else {
                         return Err(Self::handle_error_response(response).await);
                     }
@@ -155,7 +178,7 @@ impl ApiClient {
     pub async fn upload_file<U>(&self, path: &str, alias: &str, description: &str, price: i64,
                              version: &str, file_bytes: &[u8], image_bytes: Option<&[u8]>) -> Result<U, ApiError> 
     where
-        U: serde::de::DeserializeOwned,
+        U: serde::de::DeserializeOwned + 'static,
     {
         let url = format!("{}{}", self.base_url, path);
         
@@ -174,18 +197,18 @@ impl ApiClient {
                 .mime_str("application/octet-stream")
                 .map_err(|err| ApiError::ValidationError(format!("Failed to create file part: {}", err)))?;
             form = form.part("file", file_part);
-            
             if let Some(image_data) = image_bytes {
                 let image_part = reqwest::multipart::Part::bytes(image_data.to_vec())
                     .file_name("picker_image")
                     .mime_str("image/png")
                     .map_err(|err| ApiError::ValidationError(format!("Failed to create image part: {}", err)))?;
+
                 form = form.part("image", image_part);
             }
             
             // 重新构建请求
+            // 注意：不要手动设置 Content-Type，让 reqwest 自动生成包含 boundary 的 multipart/form-data 头部
             let mut request_builder = self.client.post(&url)
-                .header("Content-Type", "multipart/form-data")
                 .multipart(form);
             
             // 添加认证头
@@ -228,102 +251,113 @@ impl ApiClient {
         }
     }
     
-async fn execute_request<U>(&self, request_builder: RequestBuilder) -> Result<U, ApiError>
-where
-    U: serde::de::DeserializeOwned,
-{
-    let mut retries = 0;
-    
-    // 尝试克隆请求构建器，如果失败则只能尝试一次（不重试）
-    if let Some(mut cloned_builder) = request_builder.try_clone() {
-        loop {
-            match cloned_builder.send().await {
+    async fn execute_request<U>(&self, request_builder: RequestBuilder) -> Result<U, ApiError>
+    where
+        U: serde::de::DeserializeOwned + 'static,
+    {
+        let mut retries = 0;
+        
+        // 尝试克隆请求构建器，如果失败则只能尝试一次（不重试）
+        if let Some(mut cloned_builder) = request_builder.try_clone() {
+            loop {
+                match cloned_builder.send().await {
+                    Ok(response) => {
+                        let status = response.status();
+                        
+                        if status.is_success() {
+                            return self.handle_success_response(response).await;
+                        } else {
+                            let err = Self::handle_error_response(response).await;
+                            // 检查是否应该重试
+                            if retries < self.max_retries && Self::should_retry_on_error_status(status) {
+                                retries += 1;
+                                // 重新克隆请求构建器以进行下一次尝试
+                                if let Some(new_builder) = request_builder.try_clone() {
+                                    cloned_builder = new_builder;
+                                    // 使用指数退避算法
+                                    let delay = Duration::from_millis(1000 * 2u64.pow(retries as u32 - 1));
+                                    tokio::time::sleep(delay).await;
+                                    continue;
+                                }
+                                // 如果无法克隆，就不再重试
+                            return Err(err);
+                            }
+                            return Err(err);
+                        }
+                    },
+                    Err(err) => {
+                        if retries < self.max_retries && Self::is_retriable_error(&err) {
+                            retries += 1;
+                            
+                            // 重新克隆请求构建器以进行下一次尝试
+                            if let Some(new_builder) = request_builder.try_clone() {
+                                cloned_builder = new_builder;
+                                // 使用指数退避算法
+                                let delay = Duration::from_millis(1000 * 2u64.pow(retries as u32 - 1));
+                                tokio::time::sleep(delay).await;
+                                continue;
+                            }
+                            // 如果无法克隆，就不再重试
+                            return Err(ApiError::NetworkError(err.into()));
+                        }
+                        return Err(ApiError::NetworkError(err.into()));
+                    },
+                }
+            }
+        } else {
+            // 如果无法克隆请求构建器，就只尝试一次
+            match request_builder.send().await {
                 Ok(response) => {
                     let status = response.status();
-                    let url = response.url().clone();
                     
                     if status.is_success() {
-                        // 首先尝试获取原始文本以进行调试
-                        match response.text().await {
-                            Ok(raw_text) => {                                
-                                // 首先尝试解析为JSON
-                                if let Ok(data) = serde_json::from_str(&raw_text) {
-                                    return Ok(data);
-                                }
-                                
-                                // 如果JSON解析失败，检查是否请求的类型是String或Option<String>
-                                // 尝试将原始文本作为字符串返回
-                                if let Ok(text_result) = serde_json::from_str(&format!("{:?}", raw_text)) {
-                                    return Ok(text_result);
-                                }
-                                
-                                // 如果都失败，返回适当的错误
-                                return Err(ApiError::ValidationError("Failed to parse response content".to_string()));
-                            },
-                            Err(text_err) => {
-                                return Err(ApiError::NetworkError(text_err.into()));
-                            },
-                        }
+                        return self.handle_success_response(response).await;
                     } else {
                         return Err(Self::handle_error_response(response).await);
                     }
                 },
                 Err(err) => {
-                    if retries < self.max_retries && Self::is_retriable_error(&err) {
-                        retries += 1;
-                        
-                        // 重新克隆请求构建器以进行下一次尝试
-                        if let Some(new_builder) = request_builder.try_clone() {
-                            cloned_builder = new_builder;
-                            tokio::time::sleep(Duration::from_millis(1000 * retries as u64)).await;
-                            continue;
-                        }
-                        // 如果无法克隆，就不再重试
-                        return Err(ApiError::NetworkError(err.into()));
-                    }
                     return Err(ApiError::NetworkError(err.into()));
                 },
             }
         }
-    } else {
-        // 如果无法克隆请求构建器，就只尝试一次
-        match request_builder.send().await {
-            Ok(response) => {
-                let status = response.status();
-                let url = response.url().clone();
-                
-                if status.is_success() {
-                    // 首先尝试获取原始文本以进行调试
-                    match response.text().await {
-                        Ok(raw_text) => {                            
-                            // 首先尝试解析为JSON
-                            if let Ok(data) = serde_json::from_str(&raw_text) {
-                                return Ok(data);
-                            }
-                            
-                            // 如果JSON解析失败，检查是否请求的类型是String或Option<String>
-                            // 尝试将原始文本作为字符串返回
-                            if let Ok(text_result) = serde_json::from_str(&format!("{:?}", raw_text)) {
-                                return Ok(text_result);
-                            }
-                            
-                            // 如果都失败，返回适当的错误
-                            return Err(ApiError::ValidationError("Failed to parse response content".to_string()));
-                        },
-                        Err(text_err) => {
-                            return Err(ApiError::NetworkError(text_err.into()));
-                        },
-                    }
+    }
+
+    /// 处理成功的HTTP响应
+    async fn handle_success_response<U>(&self, response: reqwest::Response) -> Result<U, ApiError>
+    where
+        U: serde::de::DeserializeOwned + 'static,
+    {
+        // 获取响应文本
+        let raw_text = response.text().await.map_err(|e| ApiError::NetworkError(e.into()))?;
+        
+        // 尝试将响应解析为指定类型
+        match serde_json::from_str::<U>(&raw_text) {
+            Ok(data) => Ok(data),
+            Err(_) => {
+                // 如果解析失败，检查U是否是String类型
+                // 由于Rust的类型系统限制，我们不能直接在运行时检查泛型类型
+                // 但我们可以通过尝试将raw_text转换为String来处理这种情况
+                if std::any::TypeId::of::<U>() == std::any::TypeId::of::<String>() {
+                    // 安全地将raw_text转换为U类型（这里U是String）
+                    // 使用transmute_copy复制值，并使用forget避免双重释放
+                    let result = unsafe { std::mem::transmute_copy::<String, U>(&raw_text) };
+                    std::mem::forget(raw_text); // 防止raw_text被释放两次
+                    Ok(result)
                 } else {
-                    return Err(Self::handle_error_response(response).await);
+                    // 如果不是String类型且解析失败，则返回错误
+                    Err(ApiError::ValidationError("Failed to parse response content".to_string()))
                 }
-            },
-            Err(err) => {
-                return Err(ApiError::NetworkError(err.into()));
-            },
+            }
         }
     }
-}
+    
+    /// 根据HTTP状态码判断是否应该重试
+    fn should_retry_on_error_status(status: reqwest::StatusCode) -> bool {
+        status == reqwest::StatusCode::SERVICE_UNAVAILABLE ||
+        status == reqwest::StatusCode::TOO_MANY_REQUESTS ||
+        status == reqwest::StatusCode::GATEWAY_TIMEOUT
+    }
     
     pub fn is_retriable_error(err: &reqwest::Error) -> bool {
         // 检查是否是可重试的错误类型
@@ -336,21 +370,36 @@ where
     
     async fn handle_error_response(response: reqwest::Response) -> ApiError {
         let status = response.status();
-        let url = response.url().clone();
         
-        let message = format!("Failed to handle error response: {}", response.text().await.unwrap());
+        // 安全地获取错误消息，避免unwrap可能导致的panic
+        let message = match response.text().await {
+            Ok(text) => {
+                if !text.is_empty() {
+                    text
+                } else {
+                    format!("HTTP error: {}", status)
+                }
+            },
+            Err(_) => format!("HTTP error: {}", status),
+        };
 
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            return ApiError::AuthError(message);
-        } else if status == reqwest::StatusCode::NOT_FOUND {
-            return ApiError::NotFound;
-        } else if status.is_client_error() {
-            return ApiError::ValidationError(message);
-        } else if status.is_server_error() {         
-            return ApiError::ServerError(message);
+        match status {
+            reqwest::StatusCode::UNAUTHORIZED => {
+                ApiError::AuthError(message)
+            },
+            reqwest::StatusCode::NOT_FOUND => {
+                ApiError::NotFound
+            },
+            status if status.is_client_error() => {
+                ApiError::ValidationError(message)
+            },
+            status if status.is_server_error() => {
+                ApiError::ServerError(message)
+            },
+            _ => {
+                ApiError::Unknown
+            }
         }
-        
-        ApiError::Unknown
     }
 }
 

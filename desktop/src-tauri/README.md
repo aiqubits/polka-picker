@@ -192,7 +192,7 @@ pub struct AppConfig {
 - `login(email, password)`：用户登录，返回用户信息和 Token
 - `register(email, password, user_name, user_type, wallet_address)`：用户注册
 - `verify_email(email, verification_code)`：邮箱验证
-- `get_user_profile()`：获取当前用户个人资料
+- `get_user_lastest_info()`：获取当前用户最新个人资料
 - `logout()`：用户登出，清除认证信息
 - `check_login_status()`：检查登录状态
 - `get_current_user_info()`：获取当前用户信息

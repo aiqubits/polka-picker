@@ -35,6 +35,7 @@ pub struct PendingRegistrationConfig {
 pub struct BlockchainConfig {
     pub name: String,
     pub rpc_url: String,
+    pub explorer_url: String,
     pub token_usdt_url: String,
     pub authorized_contract_address: String,
     pub retry_times: i8,
@@ -57,9 +58,10 @@ impl Config {
         // 检查配置文件是否存在
         let config_path = "config.toml";
         if std::path::Path::new(config_path).exists() {
+            println!("Config file found: {}", config_path);
             builder = builder.add_source(config::File::with_name(config_path));
         } else {
-            eprintln!("Warning: config.toml file not found");
+            eprintln!("Warning: config.toml file not found at {}", config_path);
         }
 
         // 添加环境变量源
@@ -67,8 +69,13 @@ impl Config {
             .add_source(config::Environment::with_prefix("PICKER"));
 
         let config = builder.build()?.try_deserialize();
-        if let Ok(ref cfg) = config {
-            eprintln!("Loaded config: {:?}", cfg);
+        match &config {
+            Ok(cfg) => {
+                println!("Successfully loaded config: {:?}", cfg);
+            }
+            Err(e) => {
+                eprintln!("Failed to load config: {}", e);
+            }
         }
         config
     }
@@ -101,6 +108,7 @@ pub struct AppState {
     pub pending_registration_cleanup_minutes: i64,
     pub blockchain_name: String,
     pub blockchain_rpc_url: String,
+    pub blockchain_explorer_url: String,
     pub blockchain_token_usdt_url: String,
     pub blockchain_authorized_contract_address: String,
     pub blockchain_retry_times: i8,
@@ -130,6 +138,7 @@ impl AppState {
                 blockchain: BlockchainConfig {
                     name: "eth".to_string(),
                     rpc_url: "https://sepolia.infura.io/v3/7cb673f9a1324974899fc4cd4429b450".to_string(),
+                    explorer_url: "https://sepolia.etherscan.io".to_string(),
                     token_usdt_url: "https://www.okx.com/api/v5/market/ticker?instId=USDC-USDT".to_string(),
                     authorized_contract_address: "0x2ed3dddae5b2f321af0806181fbfa6d049be47d8".to_string(),
                     retry_times: 5,
@@ -154,12 +163,13 @@ impl AppState {
             pending_registration_cleanup_minutes: config.pending_registration.cleanup_minutes,
             blockchain_name: config.blockchain.name,
             blockchain_rpc_url: config.blockchain.rpc_url,
+            blockchain_explorer_url: config.blockchain.explorer_url,
             blockchain_token_usdt_url: config.blockchain.token_usdt_url,
             blockchain_authorized_contract_address: config.blockchain.authorized_contract_address,
             blockchain_retry_times: config.blockchain.retry_times,
             blockchain_retry_interval_seconds: config.blockchain.retry_interval_seconds,
             premium_payment_rate: config.premium.payment_rate,
-            premium_to_usd: config.premium.payment_rate,
+            premium_to_usd: config.premium.to_usd,
             premium_free: config.premium.free,
             premium_period: config.premium.period,
             premium_start: config.premium.start,

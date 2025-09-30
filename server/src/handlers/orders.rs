@@ -1,6 +1,6 @@
 use reqwest;
 use serde_json;
-use std::ops::{Div, Mul};
+use std::ops::Div;
 
 use axum::{
     extract::{Path, Query, State},
@@ -132,7 +132,7 @@ pub async fn create_order(
     }
 
     let picker = picker_result
-        .map_err(|_| AppError::DatabaseError)?
+        .map_err(|e| AppError::DatabaseError(format!("Failed to fetch picker: {:?}", e)))?
         .ok_or_else(|| AppError::NotFound("Picker not found".to_string()))?;
 
     // 检查支付方式和余额
@@ -163,38 +163,33 @@ pub async fn create_order(
                     &state.password_nonce,
                 )
                 .map_err(|e| {
-                    tracing::error!("Decryption to plaintext failed: {:?}", e);
-                    AppError::InternalServerError
+                    error!("Decryption to plaintext failed: {:?}", e);
+                    AppError::InternalServerError(format!("Decryption to plaintext failed: {:?}", e))
                 })?;
 
                 // 初始化签名器（使用用户的私钥明文）
                 let user_signer: PrivateKeySigner = private_key_plaintext.parse().map_err(|e| {
                     tracing::error!("Invalid private key: {}", e);
-                    AppError::InternalServerError
+                    AppError::InternalServerError(format!("Invalid private key: {:?}", e))
                 })?;
 
                 // 初始化provider
-                let provider = ProviderBuilder::new().wallet(user_signer).connect_http(
-                    state.blockchain_rpc_url.parse().map_err(|e| {
-                        tracing::error!("Invalid RPC URL: {}", e);
-                        AppError::InternalServerError
-                    })?,
-                );
+                let rpc_url = state.blockchain_rpc_url.parse().map_err(|e| {
+                    error!("Invalid RPC URL: {}", e);
+                    AppError::InternalServerError(format!("Invalid RPC URL: {:?}", e))
+                })?;
+                let provider = ProviderBuilder::new().wallet(user_signer).connect_http(rpc_url);
 
                 // 检查钱包余额
-                info!("Blockchain RPC URL: {}", state.blockchain_rpc_url);
-                info!("Parsing wallet address: {}", user.wallet_address);
                 let address: Address = user.wallet_address.parse().map_err(|e| {
-                    tracing::error!("Invalid wallet address: {} - {}", user.wallet_address, e);
+                    error!("Invalid wallet address: {} - {}", user.wallet_address, e);
                     AppError::BadRequest("Invalid wallet address".to_string())
                 })?;
-                info!("Parsed wallet address successfully: {}", address);
 
                 // 获取钱包余额
-                info!("Getting wallet balance for address: {}", address);
                 let balance = provider.get_balance(address).await.map_err(|e| {
-                    tracing::error!("Failed to get wallet balance: {}", e);
-                    AppError::InternalServerError
+                    error!("Failed to get wallet balance: {}", e);
+                    AppError::InternalServerError(format!("Failed to get wallet balance: {:?}", e))
                 })?;
 
                 // 检查钱包余额是否足够支付订单金额
@@ -281,20 +276,20 @@ pub async fn create_order(
             )
             .map_err(|e| {
                 tracing::error!("Decryption to plaintext failed: {:?}", e);
-                AppError::InternalServerError
+                AppError::InternalServerError(format!("Decryption to plaintext failed: {:?}", e))
             })?;
 
             // 初始化签名器（使用用户的私钥明文）
             let user_signer: PrivateKeySigner = private_key_plaintext.parse().map_err(|e| {
                 tracing::error!("Invalid private key: {}", e);
-                AppError::InternalServerError
+                AppError::InternalServerError(format!("Invalid private key: {:?}", e))
             })?;
 
             // 初始化provider
             let provider = ProviderBuilder::new().wallet(user_signer).connect_http(
                 state.blockchain_rpc_url.parse().map_err(|e| {
                     tracing::error!("Invalid RPC URL: {}", e);
-                    AppError::InternalServerError
+                    AppError::InternalServerError(format!("Invalid RPC URL: {:?}", e))
                 })?,
             );
 
@@ -307,7 +302,7 @@ pub async fn create_order(
 
             let dev_wallet = dev_user.wallet_address.parse::<Address>().map_err(|e| {
                 tracing::error!("Invalid developer wallet address: {}", e);
-                AppError::InternalServerError
+                AppError::InternalServerError(format!("Invalid developer wallet address: {:?}", e))
             })?;
 
             // 配置合约地址
@@ -316,7 +311,7 @@ pub async fn create_order(
                 .parse()
                 .map_err(|e| {
                     tracing::error!("Invalid Authorized Contract Address: {}", e);
-                    AppError::InternalServerError
+                    AppError::InternalServerError(format!("Invalid Authorized Contract Address: {:?}", e))
                 })?;
 
             // 创建合约实例
@@ -325,20 +320,20 @@ pub async fn create_order(
             // 构建并发送交易
             let token_usdt_url: String = state.blockchain_token_usdt_url.parse().map_err(|e| {
                 tracing::error!("Invalid Token Usdt URL: {}", e);
-                AppError::InternalServerError
+                AppError::InternalServerError(format!("Invalid Token Usdt URL: {:?}", e))
             })?;
 
-            // 使用reqwest请求token_usdt_url获取CFX Token价格
+            // 使用reqwest请求token_usdt_url获取 Token Token价格
             let client = reqwest::Client::new();
             let response = client.get(&token_usdt_url).send().await.map_err(|e| {
-                tracing::error!("Failed to fetch CFX price: {}", e);
-                AppError::InternalServerError
+                tracing::error!("Failed to fetch Token price: {}", e);
+                AppError::InternalServerError(format!("Failed to fetch Token price: {:?}", e))
             })?;
 
             // 解析JSON响应
             let json_response: serde_json::Value = response.json().await.map_err(|e| {
-                tracing::error!("Failed to parse CFX price response: {}", e);
-                AppError::InternalServerError
+                tracing::error!("Failed to parse Token price response: {}", e);
+                AppError::InternalServerError(format!("Failed to parse Token price response: {:?}", e))
             })?;
 
             // 检查响应是否成功
@@ -347,12 +342,12 @@ pub async fn create_order(
                     .get("msg")
                     .and_then(|m| m.as_str())
                     .unwrap_or("Unknown error");
-                tracing::error!("CFX price API returned error: {}", error_msg);
-                return Err(AppError::InternalServerError);
+                tracing::error!("Token price API returned error: {}", error_msg);
+                return Err(AppError::InternalServerError(format!("Token price API returned error: {:?}", error_msg)));
             }
 
-            // 获取data数组中的第一个元素的last字段（CFX价格）
-            let cfx_price = json_response
+            // 获取data数组中的第一个元素的last字段（Token价格）
+            let token_price = json_response
                 .get("data")
                 .and_then(|data| data.as_array())
                 .and_then(|data_array| data_array.get(0))
@@ -360,19 +355,19 @@ pub async fn create_order(
                 .and_then(|last| last.as_str())
                 .and_then(|last_str| last_str.parse::<f64>().ok())
                 .ok_or_else(|| {
-                    tracing::error!("Failed to extract CFX price from response");
-                    AppError::InternalServerError
+                    tracing::error!("Failed to extract Token price from response");
+                    AppError::InternalServerError(format!("Failed to extract Token price from response"))
                 })?;
 
-            // 计算订单金额（picker.price / cfx_price）并转换为U256
-            let order_amount_float = (picker.price as f64).div(cfx_price);
+            // 计算订单金额（picker.price / token_price）并转换为U256
+            let order_amount_float = (picker.price as f64).div(token_price);
             // 由于U256不支持直接从浮点数转换，我们需要先转换为整数（乘以10^18来保留精度）
             let order_amount = U256::from((order_amount_float * 10_f64.powf(18.0)) as u128);
 
             // 记录日志
             info!(
                 "BlockChain Token price: {:.6}, order_amount_float: {:.6}, order_amount (wei): {}",
-                cfx_price, order_amount_float, order_amount
+                token_price, order_amount_float, order_amount
             );
 
             let pending_tx = contract
@@ -382,7 +377,7 @@ pub async fn create_order(
                 .await
                 .map_err(|e| {
                     tracing::error!("Failed to send transaction: {}", e);
-                    AppError::InternalServerError
+                    AppError::InternalServerError(format!("Failed to send transaction: {:?}", e))
                 })?;
 
             // 获取交易哈希字符串
@@ -396,7 +391,7 @@ pub async fn create_order(
     info!("Starting transaction...");
     let mut tx = state.db.begin().await.map_err(|e| {
         info!("Failed to start transaction: {:?}", e);
-        AppError::DatabaseError
+        AppError::DatabaseError(format!("Failed to start transaction: {:?}", e))
     })?;
 
     // 插入订单记录
@@ -425,7 +420,7 @@ pub async fn create_order(
             Err(e) => error!("Failed to insert wallet order: {:?}", e),
         }
 
-        result.map_err(|_| AppError::DatabaseError)?;
+        result.map_err(|e| AppError::DatabaseError(format!("Failed to insert wallet order: {:?}", e)))?;
     } else {
         info!("Inserting premium order...");
         let result = sqlx::query(
@@ -449,7 +444,7 @@ pub async fn create_order(
             Err(e) => info!("Failed to insert premium order: {:?}", e),
         }
 
-        result.map_err(|_| AppError::DatabaseError)?;
+        result.map_err(|e| AppError::DatabaseError(format!("Failed to insert premium order: {:?}", e)))?;
     }
 
     // 扣除用户余额，并增加开发者账户余额（如果是Premium支付）
@@ -461,18 +456,15 @@ pub async fn create_order(
                 .bind(user_id)
                 .execute(&mut *tx)
                 .await;
-
+        println!("picker.price {:?}", picker.price);
         match &result {
             Ok(_) => info!("User balance updated successfully"),
             Err(e) => info!("Failed to update user balance: {:?}", e),
         }
 
-        result.map_err(|_| AppError::DatabaseError)?;
+        result.map_err(|e| AppError::DatabaseError(format!("Failed to update user balance: {:?}", e)))?;
 
-        let increase_balance_to_dev = picker
-            .price
-            .checked_sub((picker.price as f32).mul(pay_rate) as i64)
-            .unwrap_or_default();
+        let increase_balance_to_dev = (picker.price as f32 * (1.0 - pay_rate)) as i64;
 
         info!("Increase balance to dev: {}", increase_balance_to_dev);
 
@@ -488,7 +480,7 @@ pub async fn create_order(
             Err(e) => info!("Failed to update Developer balance: {:?}", e),
         }
 
-        result.map_err(|_| AppError::DatabaseError)?;
+        result.map_err(|e| AppError::DatabaseError(format!("Failed to update Developer balance: {:?}", e)))?;
 
         // 更新订单状态为成功
         info!("Updating order status to success...");
@@ -503,39 +495,39 @@ pub async fn create_order(
             Err(e) => info!("Failed to update order status: {:?}", e),
         }
 
-        result.map_err(|_| AppError::DatabaseError)?;
+        result.map_err(|e| AppError::DatabaseError(format!("Failed to update order status: {:?}", e)))?;
 
-        // 增加Picker下载次数
-        info!("Increasing picker download count...");
-        let result = sqlx::query(
-            "UPDATE pickers SET download_count = download_count + 1 WHERE picker_id = ?",
-        )
-        .bind(payload.picker_id)
-        .execute(&mut *tx)
-        .await;
+        // // 增加Picker下载次数 已在download file中实现
+        // info!("Increasing picker download count...");
+        // let result = sqlx::query(
+        //     "UPDATE pickers SET download_count = download_count + 1 WHERE picker_id = ?",
+        // )
+        // .bind(payload.picker_id)
+        // .execute(&mut *tx)
+        // .await;
 
-        match &result {
-            Ok(_) => info!("Picker download count updated successfully"),
-            Err(e) => info!("Failed to update picker download count: {:?}", e),
-        }
+        // match &result {
+        //     Ok(_) => info!("Picker download count updated successfully"),
+        //     Err(e) => info!("Failed to update picker download count: {:?}", e),
+        // }
 
-        result.map_err(|_| AppError::DatabaseError)?;
+        // result.map_err(|_| AppError::DatabaseError)?;
     } else {
         // 实现重试机制，查询链上钱包交易状态是否成功
         if !tx_hash.is_empty() {
-            info!("开始查询交易状态，交易哈希: {}", tx_hash);
+            info!("Starting to query transaction status, transaction hash: {}", tx_hash);
 
             // 将交易哈希字符串转换为TxHash类型
             let tx_hash_parsed = tx_hash.parse().map_err(|e| {
-                tracing::error!("无效的交易哈希: {} - {}", tx_hash, e);
-                AppError::InternalServerError
+                error!("Invalid transaction hash: {} - {}", tx_hash, e);
+                AppError::InternalServerError(format!("Invalid transaction hash: {}", tx_hash))
             })?;
 
             // 创建provider用于查询交易状态
             let provider = ProviderBuilder::new().connect_http(
                 state.blockchain_rpc_url.parse().map_err(|e| {
-                    tracing::error!("Invalid RPC URL: {}", e);
-                    AppError::InternalServerError
+                    error!("Invalid RPC URL: {}", e);
+                    AppError::InternalServerError(format!("Invalid RPC URL: {}", e))
                 })?,
             );
 
@@ -549,14 +541,14 @@ pub async fn create_order(
             .await
             {
                 info!(
-                    "交易状态: {}, 区块号: {:?}",
-                    if receipt.status() { "成功" } else { "失败" },
+                    "Transaction status: {}, Block number: {:?}",
+                    if receipt.status() { "Success" } else { "Failed" },
                     receipt.block_number
                 );
 
                 // 如果交易成功，更新订单状态和增加下载次数
                 if receipt.status() {
-                    info!("交易成功，更新订单状态和Picker下载次数");
+                    info!("Transaction success, updating order status and picker download count");
 
                     // 更新订单状态为成功
                     let result = sqlx::query("UPDATE orders SET status = ? WHERE order_id = ?")
@@ -566,11 +558,11 @@ pub async fn create_order(
                         .await;
 
                     match &result {
-                        Ok(_) => info!("订单状态更新成功"),
+                        Ok(_) => info!("Order status updated successfully"),
                         Err(e) => info!("Failed to update order status: {:?}", e),
                     }
 
-                    result.map_err(|_| AppError::DatabaseError)?;
+                    result.map_err(|e| AppError::DatabaseError(format!("Failed to update order status: {:?}", e)))?;
 
                     // 增加Picker下载次数
                     let result = sqlx::query(
@@ -581,16 +573,16 @@ pub async fn create_order(
                     .await;
 
                     match &result {
-                        Ok(_) => info!("Picker下载次数更新成功"),
+                        Ok(_) => info!("Picker download count updated successfully"),
                         Err(e) => info!("Failed to update picker download count: {:?}", e),
                     }
 
-                    result.map_err(|_| AppError::DatabaseError)?;
+                    result.map_err(|e| AppError::DatabaseError(format!("Failed to update picker download count: {:?}", e)))?;
                 } else {
-                    info!("交易失败，订单保持待处理状态");
+                    info!("Transaction failed, order status remains pending");
                 }
             } else {
-                info!("未能获取交易回执，尝试查询原始交易...");
+                info!("Failed to get transaction receipt, trying to query raw transaction...");
                 // 调用带重试机制的函数查询原始交易
                 if let Ok(()) = get_raw_transaction_with_retry(
                     &provider,
@@ -601,7 +593,7 @@ pub async fn create_order(
                 .await
                 {
                     // 继续实现钱包支付订单剩余逻辑
-                    info!("交易成功，更新订单状态和Picker下载次数");
+                    info!("Transaction successful, updating order status and Picker download count");
 
                     // 更新订单状态为成功
                     let result = sqlx::query("UPDATE orders SET status = ? WHERE order_id = ?")
@@ -611,11 +603,11 @@ pub async fn create_order(
                         .await;
 
                     match &result {
-                        Ok(_) => info!("订单状态更新成功"),
+                        Ok(_) => info!("Order status updated successfully"),
                         Err(e) => info!("Failed to update order status: {:?}", e),
                     }
 
-                    result.map_err(|_| AppError::DatabaseError)?;
+                    result.map_err(|e| AppError::DatabaseError(format!("Failed to update order status: {:?}", e)))?;
 
                     // 增加Picker下载次数
                     let result = sqlx::query(
@@ -630,15 +622,16 @@ pub async fn create_order(
                         Err(e) => info!("Failed to update picker download count: {:?}", e),
                     }
 
-                    result.map_err(|_| AppError::DatabaseError)?;
+                    result.map_err(|e| AppError::DatabaseError(format!("Failed to update picker download count: {:?}", e)))?;
                 } else {
                     info!(
-                        "既未能获取交易回执，也未能查询到原始交易，订单保持待处理状态，交易未成功"
+                        "Failed to get transaction receipt and query raw transaction, order status remains pending, transaction failed"
                     );
                 }
             }
         }
     }
+
     // 带重试机制的交易回执查询函数
     async fn get_receipt_with_retry<P: Provider>(
         provider: &P,
@@ -651,7 +644,7 @@ pub async fn create_order(
                 // 需要进一步判断如果回执是None，则说明交易未被确认，需要继续重试
                 Ok(receipt) => {
                     if receipt.is_none() {
-                        info!("交易未被确认，等待 {} 秒后重试", retry_interval_seconds);
+                        info!("Transaction receipt is None, waiting {} seconds for retry", retry_interval_seconds);
                         if attempt < max_retries {
                             tokio::time::sleep(Duration::from_secs(retry_interval_seconds as u64))
                                 .await;
@@ -662,7 +655,7 @@ pub async fn create_order(
                 }
                 Err(e) => {
                     info!(
-                        "尝试 receipt {} 获取交易回执失败: {}, 等待 {} 秒后重试",
+                        "Attempt {} failed to get transaction receipt: {}, waiting {} seconds for retry",
                         attempt, e, retry_interval_seconds
                     );
                     if attempt < max_retries {
@@ -672,7 +665,7 @@ pub async fn create_order(
                 }
             }
         }
-        Err(AppError::InternalServerError)
+        Err(AppError::InternalServerError(format!("Failed to get transaction receipt after {} attempts", max_retries)))
     }
 
     // 带重试机制的Raw交易查询函数
@@ -698,19 +691,19 @@ pub async fn create_order(
                             // 如果获取到原始交易数据，说明交易已经被网络接收
                             // 但还没有被确认（没有回执）
                             info!(
-                                "获取到原始交易数据，交易已发送但未确认，长度: {} 字节",
+                                "Raw transaction data received, transaction sent but not confirmed, length: {} bytes",
                                 raw_tx.len()
                             );
                         }
                         None => {
-                            info!("交易不存在");
+                            info!("Transaction does not exist");
                         }
                     }
                     return Ok(());
                 }
                 Err(e) => {
                     info!(
-                        "尝试 raw transaction {} 获取交易失败: {:?}, 等待 {} 秒后重试",
+                        "Attempt {} failed to get raw transaction: {:?}, waiting {} seconds for retry",
                         attempt, e, retry_interval_seconds
                     );
                     if attempt < max_retries {
@@ -720,7 +713,7 @@ pub async fn create_order(
                 }
             }
         }
-        Err(AppError::InternalServerError)
+        Err(AppError::InternalServerError(format!("Failed to get raw transaction after {} attempts.", max_retries)))
     }
 
     // 提交事务
@@ -732,7 +725,7 @@ pub async fn create_order(
         Err(e) => info!("Failed to commit transaction: {:?}", e),
     }
 
-    result.map_err(|_| AppError::DatabaseError)?;
+    result.map_err(|e| AppError::DatabaseError(format!("Failed to commit transaction: {:?}", e)))?;
 
     info!("Order created successfully with ID: {}", order_id);
 
@@ -744,7 +737,7 @@ pub async fn create_order(
     state
         .download_tokens
         .lock()
-        .map_err(|_| AppError::InternalServerError)?
+        .map_err(|e| AppError::InternalServerError(format!("Failed to lock download tokens: {:?}", e)))?
         .insert(token_value.clone(), download_token);
 
     info!(
@@ -752,11 +745,22 @@ pub async fn create_order(
         order_id, token_value
     );
 
+    // 构造 explorer 链接
+    let explorer_tx_url = format!(
+        "URL: {}/tx/{}",
+        state.blockchain_explorer_url,
+        tx_hash
+    );
+    let message = format!(
+        "Order created successfully. {} ",
+        explorer_tx_url
+    );
+
+    info!("Explorer transaction URL: {}", explorer_tx_url);
+
     Ok(Json(CreateOrderResponse {
         token: token_value,
-        message:
-            "Order created successfully, Never close the client and wait for execution to complete!"
-                .to_string(),
+        message,
     }))
 }
 
@@ -815,7 +819,7 @@ pub async fn get_user_orders(
         .bind(status)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError)?;
+        .map_err(|e| AppError::DatabaseError(format!("Failed to get total order count: {:?}", e)))?;
         result.0
     } else {
         let result: (i64,) = sqlx::query_as(&format!(
@@ -825,7 +829,7 @@ pub async fn get_user_orders(
         .bind(user_id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError)?;
+        .map_err(|e| AppError::DatabaseError(format!("Failed to get total order count: {:?}", e)))?;
         result.0
     };
 
@@ -838,7 +842,7 @@ pub async fn get_user_orders(
             .bind(offset as i64)
             .fetch_all(&state.db)
             .await
-            .map_err(|_| AppError::DatabaseError)?
+            .map_err(|e| AppError::DatabaseError(format!("Failed to get order list: {:?}", e)))?
     } else {
         sqlx::query_as::<_, Order>(&format!("SELECT o.* FROM orders o {}", where_clause))
             .bind(user_id)
@@ -846,7 +850,7 @@ pub async fn get_user_orders(
             .bind(offset as i64)
             .fetch_all(&state.db)
             .await
-            .map_err(|_| AppError::DatabaseError)?
+            .map_err(|e| AppError::DatabaseError(format!("Failed to get order list: {:?}", e)))?
     };
 
     // 获取Picker信息
@@ -856,7 +860,7 @@ pub async fn get_user_orders(
             .bind(order.picker_id)
             .fetch_one(&state.db)
             .await
-            .map_err(|_| AppError::DatabaseError)?;
+            .map_err(|e| AppError::DatabaseError(format!("Failed to get picker info: {:?}", e)))?;
 
         order_infos.push(OrderInfo {
             order_id: order.order_id,
@@ -924,7 +928,7 @@ pub async fn get_order_detail(
     }
 
     let order = order_result
-        .map_err(|_| AppError::DatabaseError)?
+        .map_err(|e| AppError::DatabaseError(format!("Failed to get order detail: {:?}", e)))?
         .ok_or_else(|| AppError::NotFound("Order not found".to_string()))?;
 
     // 获取Picker信息
@@ -946,7 +950,7 @@ pub async fn get_order_detail(
         }
         Err(e) => {
             info!("Error fetching picker: {}", e);
-            return Err(AppError::DatabaseError);
+            return Err(AppError::DatabaseError(format!("Failed to get picker info: {:?}", e)));
         }
     };
 

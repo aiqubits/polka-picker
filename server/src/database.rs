@@ -176,7 +176,7 @@ pub async fn insert_test_data(pool: &DbPool) -> Result<(), sqlx::Error> {
     let hashed_password = hash_password_with_user_id(test_password, test_user_id, salt);
     
     // 生成钱包
-    let (private_key, wallet_address) = generate_wallet(master_key, nonce);
+    let (private_key, wallet_address) = generate_wallet(None, master_key, nonce).expect("Failed to generate wallet");
     
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     

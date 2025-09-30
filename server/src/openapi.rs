@@ -1,6 +1,5 @@
 use utoipa::{OpenApi, ToSchema};
-use utoipa_swagger_ui::SwaggerUi;
-use axum::Router;
+use axum::{Router, routing::get};
 use crate::config::AppState;
 use crate::handlers::*;
 use crate::models::*;
@@ -115,16 +114,14 @@ pub struct ErrorResponse {
 
 
 
-// 创建 Swagger UI 路由
+// 处理 OpenAPI JSON 请求
+async fn openapi_json() -> impl axum::response::IntoResponse {
+    axum::Json(ApiDoc::openapi())
+}
+
+// 创建 OpenAPI 路由
 pub fn create_swagger_routes() -> Router<AppState> {
     Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi())
-        .config(utoipa_swagger_ui::Config::new(["/api-docs/openapi.json"])
-            .use_base_layout()
-            .show_extensions(true)
-            .show_common_extensions(true)
-            .persist_authorization(true)
-        )
-    )
+        .route("/api-docs/openapi.json", get(openapi_json))
 }
 

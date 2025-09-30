@@ -19,8 +19,8 @@ pub enum AppError {
     Unauthorized(String),
     NotFound(String),
     UnprocessableEntity(String),
-    InternalServerError,
-    DatabaseError,
+    InternalServerError(String),
+    DatabaseError(String),
 }
 
 impl IntoResponse for AppError {
@@ -30,8 +30,8 @@ impl IntoResponse for AppError {
             AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::UnprocessableEntity(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
-            AppError::InternalServerError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string()),
-            AppError::DatabaseError => (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()),
+            AppError::InternalServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            AppError::DatabaseError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };
 
         let body = Json(json!({
@@ -43,27 +43,55 @@ impl IntoResponse for AppError {
 }
 
 // 生成EVM钱包地址
-pub fn generate_wallet(master_key: &str, nonce: &str) -> (String, String) {
-    // 1.创建一个随机的私钥签名器
-    let signer = PrivateKeySigner::random();
+pub fn generate_wallet(private_key: Option<&str>, master_key: &str, nonce: &str) -> Result<(String, String), AppError> {
+    if let Some(pk) = private_key {
+        // 1.使用提供的私钥创建签名器
+        let signer: PrivateKeySigner = pk.parse().map_err(|e| AppError::BadRequest(format!("Invalid private key format: {:?}", e)))?;
 
-    // 2.获取钱包地址
-    let address = signer.address();
+        // 2.获取钱包地址
+        let address = signer.address();
 
-    // 3.获取私钥
-    let private_key_bytes = signer.to_bytes();
-    let private_key_hex = hex::encode(private_key_bytes);
+        // 3.获取私钥
+        let private_key_bytes = signer.to_bytes();
+        let private_key_hex = hex::encode(private_key_bytes);
 
-    // 4.加密私钥
-    let encrypted_pk = match encrypt_private_key(&private_key_hex, master_key, nonce) {
-        Ok(encrypted) => encrypted,
-        Err(e) => {
-            tracing::error!("Failed to encrypt private key: {:?}", e);
-            private_key_hex.clone() // 在加密失败时返回原始私钥（仅用于测试环境）
-        }
-    };
-    
-    (encrypted_pk, address.to_string())
+        // 4.加密私钥
+        let encrypted_pk = encrypt_private_key(&private_key_hex, master_key, nonce)?;
+
+        // let encrypted_pk = match encrypt_private_key(&private_key_hex, master_key, nonce) {
+        //     Ok(encrypted) => encrypted,
+        //     Err(e) => {
+        //         tracing::error!("Failed to encrypt private key: {:?}", e);
+        //         private_key_hex.clone() // 在加密失败时返回原始私钥（仅用于测试环境）
+        //     }
+        // };
+        
+        return Ok((encrypted_pk, address.to_string()));        
+
+    } else {
+        // 1.创建一个随机的私钥签名器
+        let signer = PrivateKeySigner::random();
+
+        // 2.获取钱包地址
+        let address = signer.address();
+
+        // 3.获取私钥
+        let private_key_bytes = signer.to_bytes();
+        let private_key_hex = hex::encode(private_key_bytes);
+
+        // 4.加密私钥
+        let encrypted_pk = encrypt_private_key(&private_key_hex, master_key, nonce)?;
+
+        // let encrypted_pk = match encrypt_private_key(&private_key_hex, master_key, nonce) {
+        //     Ok(encrypted) => encrypted,
+        //     Err(e) => {
+        //         tracing::error!("Failed to encrypt private key: {:?}", e);
+        //         private_key_hex.clone() // 在加密失败时返回原始私钥（仅用于测试环境）
+        //     }
+        // };
+        
+        return Ok((encrypted_pk, address.to_string()));
+    }
 }
 
 // 生成随机token
@@ -107,11 +135,13 @@ pub fn encrypt_private_key(password: &str, master_key: &str, nonce: &str) -> Res
     // 创建加密器并加密密码
     let cipher = Aes256Gcm::new_from_slice(&key_array).map_err(|e| {
         tracing::error!("AES-256-GCM key init failed: {:?}", e);
-        AppError::InternalServerError})?;
+        AppError::InternalServerError(format!("AES-256-GCM key init failed: {:?}", e))
+    })?;
     let ciphertext = cipher.encrypt(nonce_obj, password.as_bytes())
         .map_err(|e| {
             tracing::error!("AES-256-GCM encrypt failed: {:?}", e);
-            AppError::InternalServerError})?;
+            AppError::InternalServerError(format!("AES-256-GCM encrypt failed: {:?}", e))
+        })?;
     
     // 将密文编码为Base64并返回
     Ok(general_purpose::STANDARD
@@ -144,21 +174,25 @@ pub fn decrypt_private_key(encrypted: &str, master_key: &str, nonce: &str) -> Re
         .decode(encrypted)
         .map_err(|e| {
             tracing::error!("Base64 decode failed: {:?}", e);
-            AppError::InternalServerError})?;
+            AppError::InternalServerError(format!("Base64 decode failed: {:?}", e))
+        })?;
     
     // 创建解密器并解密
     let cipher = Aes256Gcm::new_from_slice(&key_array).map_err(|e| {
         tracing::error!("AES-256-GCM key init failed: {:?}", e);
-        AppError::InternalServerError})?;
+        AppError::InternalServerError(format!("AES-256-GCM key init failed: {:?}", e))
+    })?;
     let plaintext = cipher.decrypt(nonce_obj, ciphertext.as_ref())
         .map_err(|e| {
             tracing::error!("AES-256-GCM decrypt failed: {:?}", e);
-            AppError::InternalServerError})?;
+            AppError::InternalServerError(format!("AES-256-GCM decrypt failed: {:?}", e))
+        })?;
     
     // 转换为字符串
     String::from_utf8(plaintext).map_err(|e| {
         tracing::error!("Decrypted plaintext is not valid UTF-8: {:?}", e);
-        AppError::InternalServerError})
+        AppError::InternalServerError(format!("Decrypted plaintext is not valid UTF-8: {:?}", e))
+    })
 }
 
 // 使用自定义 salt 哈希密码
@@ -179,12 +213,12 @@ pub fn verify_password_with_user_id(password: &str, user_id: Uuid, hash: &str, s
 
 // 哈希密码
 pub fn hash_password(password: &str) -> Result<String, AppError> {
-    hash(password, DEFAULT_COST).map_err(|_| AppError::InternalServerError)
+    hash(password, DEFAULT_COST).map_err(|e| AppError::InternalServerError(format!("Password hash failed: {:?}", e)))
 }
 
 // 验证密码
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
-    verify(password, hash).map_err(|_| AppError::InternalServerError)
+    verify(password, hash).map_err(|e| AppError::InternalServerError(format!("Password verify failed: {:?}", e)))
 }
 
 #[cfg(test)]
@@ -225,7 +259,7 @@ mod tests {
         let master_key = "openpickopenpickopenpickopenpick";
         let nonce = "openpickopen";
 
-        let (private_key, wallet_address) = generate_wallet(master_key, nonce);
+        let (private_key, wallet_address) = generate_wallet(None, master_key, nonce).expect("Failed to generate wallet");
         
         // 私钥应该是64个字符的十六进制字符串
         assert_eq!(private_key.len(), 64);
@@ -242,8 +276,8 @@ mod tests {
         let master_key = "openpickopenpickopenpickopenpick";
         let nonce = "openpickopen";
 
-        let (private_key1, wallet_address1) = generate_wallet(master_key, nonce);
-        let (private_key2, wallet_address2) = generate_wallet(master_key, nonce);
+        let (private_key1, wallet_address1) = generate_wallet(None, master_key, nonce).expect("Failed to generate wallet");
+        let (private_key2, wallet_address2) = generate_wallet(None, master_key, nonce).expect("Failed to generate wallet");
         
         // 每次生成的钱包应该不同
         assert_ne!(private_key1, private_key2);
@@ -398,7 +432,7 @@ mod tests {
         assert!(result.is_err());
         
         match result.unwrap_err() {
-            AppError::InternalServerError => {},
+            AppError::InternalServerError(_) => {},
             _ => panic!("Expected InternalServerError"),
         }
     }
@@ -426,12 +460,12 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
         // 测试InternalServerError错误
-        let error = AppError::InternalServerError;
+        let error = AppError::InternalServerError("Internal server error message".to_string());
         let response = error.into_response();
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
         // 测试DatabaseError错误
-        let error = AppError::DatabaseError;
+        let error = AppError::DatabaseError("Database error message".to_string());
         let response = error.into_response();
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }

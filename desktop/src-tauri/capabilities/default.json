@@ -11,6 +11,26 @@
     "core:window:allow-destroy",
     "dialog:default",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "opener:allow-reveal-item-in-dir",
+    "opener:allow-open-url",
+    "opener:allow-default-urls",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "$HOME",
+          "windows": ["main"]
+        },
+        {
+          "path": "$DOWNLOADS",
+          "windows": ["main"]
+        },
+        {
+          "path": "$DOCUMENTS",
+          "windows": ["main"]
+        }
+      ]
+    }
   ]
 }

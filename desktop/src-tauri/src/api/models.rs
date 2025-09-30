@@ -51,10 +51,11 @@ pub struct ConnectionStatus {
 }
 
 // 系统信息
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SystemInfo {
     pub chain_name: String,
     pub chain_url: String,
+    pub explorer_url: String,
     pub premium_payment_rate: i64,
     pub premium_to_usd: i64,
     pub premium_free: i64,
@@ -89,16 +90,10 @@ pub struct UserInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ResponseUserInfo {
-    pub chain_name: String,
-    pub premium_free: i64,
-    pub premium_payment_rate: i64,
-    pub premium_to_usd: i64,
-    pub premium_period: i64,
-    pub premium_start: bool,
+pub struct UserSystemInfoResponse {
     pub wallet_balance: i64,
-    // #[serde(flatten)]
     pub user_info: UserInfo,
+    pub system_info: SystemInfo,
 }
 
 // 用户类型

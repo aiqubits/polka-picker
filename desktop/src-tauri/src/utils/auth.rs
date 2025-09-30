@@ -1,5 +1,4 @@
 // 认证相关工具
-
 use tauri::{Wry};
 use tauri_plugin_store::Store;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -9,6 +8,7 @@ use std::sync::Arc;
 // Token 存储键名
 pub const TOKEN_STORAGE_KEY: &str = "auth_token";
 pub const USER_INFO_KEY: &str = "user_info";
+pub const SYSTEM_INFO_KEY: &str = "system_info";
 pub const STORE_FILE_NAME: &str = "auth.json";
 
 // 认证管理器
@@ -61,7 +61,7 @@ impl AuthManager {
     
     // 检查是否已登录
     pub fn is_logged_in(&self) -> bool {
-        self.get_token().is_some()
+        self.get_user_info().is_some()
     }
     
     // 保存用户信息
@@ -70,10 +70,22 @@ impl AuthManager {
         self.token_storage.save()?;
         Ok(())
     }
+
+    // 保存系统信息
+    pub fn save_system_info(&self, system_info: &serde_json::Value) -> Result<(), anyhow::Error> {
+        self.token_storage.set(SYSTEM_INFO_KEY, system_info.clone());
+        self.token_storage.save()?;
+        Ok(())
+    }
     
     // 获取用户信息
     pub fn get_user_info(&self) -> Option<Value> {
         self.token_storage.get(USER_INFO_KEY).map(|v| v.clone())
+    }
+
+    // 获取系统信息
+    pub fn get_system_info(&self) -> Option<Value> {
+        self.token_storage.get(SYSTEM_INFO_KEY).map(|v| v.clone())
     }
     
     // 从 JWT token 中解析过期时间

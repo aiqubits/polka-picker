@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import MarketplaceContent from './components/MarketplaceContent'
 import ProfileContent from './components/ProfileContent'
@@ -6,25 +6,17 @@ import ChatbotContent from './components/ChatbotContent'
 import LogStream from './components/LogStream'
 import MainContent from './components/MainContent'
 import { clientAPI } from './client/api'
-import type { ResponseUserInfo } from './types'
-
-// 用户类型定义
-interface User {
-  id: string;
-  username: string;
-  avatar: string;
-  wallet: number;
-  premium: number;
-}
+import type { UserSystemInfoResponse, UserInfo }  from './types'
 
 function App() {
   const [activePage, setActivePage] = useState<'home' | 'chatbot' | 'marketplace' | 'profile'>('home')
   
   // 登录状态管理
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showSignupModal, setShowSignupModal] = useState(false)
+  const [serverConnected, setServerConnected] = useState(false)
 
   // 表单状态管理
   const [loginEmail, setLoginEmail] = useState('');
@@ -40,17 +32,20 @@ function App() {
   // API调用函数
   const handleLogin = async (email: string, password: string) => {
     try {
-      const response: ResponseUserInfo = await clientAPI.login(email, password);
-
+      const response: UserSystemInfoResponse = await clientAPI.login(email, password);
       setCurrentUser({
-        id: response.user_info.user_id,
-        username: response.user_info.user_name || "OpenPick",
-        avatar: response.user_info.user_name.substring(0, 2).toUpperCase() || "OP",
-        wallet: response.wallet_balance ? Math.round(response.wallet_balance / 1e7) / 1e2 : 0,
-        premium: response.user_info.premium_balance || 0,
+        user_id: response.user_info.user_id,
+        email: response.user_info.email,
+        user_name: response.user_info.user_name || "OpenPick",
+        user_type: response.user_info.user_type.toLowerCase() === 'gen' ? 'User' : 'Developer',
+        wallet_address: response.user_info.wallet_address,
+        premium_balance: response.user_info.premium_balance || 0,
+        created_at: response.user_info.created_at,
       });
       setIsLoggedIn(true);
       setShowLoginModal(false);
+      // 跳转到Home页面而不是刷新页面
+      setActivePage('home');
     } catch (error) {
       console.error('Login error:', error);
       alert('Login failed. ' + (error instanceof Error ? error.message : 'Please try again.'));
@@ -95,6 +90,53 @@ function App() {
     }
   };
 
+  // 检查登录状态
+  const checkLoginStatus = async () => {
+    try {
+      const loggedIn = await clientAPI.checkLoginStatus()
+      setIsLoggedIn(loggedIn)
+      if (loggedIn) {
+        const userInfo: UserInfo = await clientAPI.getCurrentUserInfo();
+        // const systemInfo = await clientAPI.getSystemInfo();
+        // const walletBalance: number = await clientAPI.getWalletBalance(userInfo.wallet_address, systemInfo.chain_url);
+        setCurrentUser({
+          user_id: userInfo.user_id,
+          email: userInfo.email,
+          user_name: userInfo.user_name,
+          user_type: userInfo.user_type,
+          wallet_address: userInfo.wallet_address,
+          premium_balance: userInfo.premium_balance,
+          created_at: userInfo.created_at,
+          // id: userInfo.user_id,
+          // username: userInfo.user_name || "OpenPick",
+          // avatar: userInfo.user_name.substring(0, 2).toUpperCase() || "OP",
+          // wallet: walletBalance ? Math.round(walletBalance / 1e7) / 1e2 : 0,
+          // premium: userInfo.premium_balance || 0,
+        });
+      }
+    } catch (error) {
+      console.error('Check login status error:', error);
+      setIsLoggedIn(false)
+    }
+  }
+
+  const checkServerStatus = async () => {
+    try {
+      const status = await clientAPI.checkServerConnection();
+      console.log('Server connection status:', status);
+      setServerConnected(status.is_connected);
+    } catch (error) {
+      console.error('Check server status error:', error);
+      setServerConnected(false);
+    }
+  }
+
+  // 组件挂载时检查登录状态和服务器连接状态
+  useEffect(() => {
+    checkServerStatus()
+    checkLoginStatus()
+  }, [])
+
   return (
     <div className="app">
       {/* Top Header */}
@@ -118,20 +160,24 @@ function App() {
               <span className="nav-icon">🤖</span>
               <span className="nav-text">Chatbot</span>
             </button>
-            <button 
-              className={`nav-item ${activePage === 'marketplace' ? 'active' : ''}`}
-              onClick={() => setActivePage('marketplace')}
-            >
-              <span className="nav-icon">🛒</span>
-              <span className="nav-text">Marketplace</span>
-            </button>
-            <button 
-              className={`nav-item ${activePage === 'profile' ? 'active' : ''}`}
-              onClick={() => setActivePage('profile')}
-            >
-              <span className="nav-icon">👤</span>
-              <span className="nav-text">Profile</span>
-            </button>
+            {serverConnected && (
+              <button 
+                className={`nav-item ${activePage === 'marketplace' ? 'active' : ''}`}
+                onClick={() => setActivePage('marketplace')}
+              >
+                <span className="nav-icon">🛒</span>
+                <span className="nav-text">Marketplace</span>
+              </button>
+            )}
+            {serverConnected && (
+              <button 
+                className={`nav-item ${activePage === 'profile' ? 'active' : ''}`}
+                onClick={() => setActivePage('profile')}
+              >
+                <span className="nav-icon">👤</span>
+                <span className="nav-text">Profile</span>
+              </button>
+            )}
           </nav>
         </div>
         <div className="header-right">
@@ -141,12 +187,12 @@ function App() {
               onClick={() => setShowLogoutMenu(!showLogoutMenu)}
               onMouseLeave={() => setTimeout(() => setShowLogoutMenu(false), 2000)}
             >
-              <div className="user-avatar">{currentUser?.avatar || 'Us'}</div>
+              <div className="user-avatar">{currentUser?.user_name?.substring(0, 2).toUpperCase() || 'OP'}</div>
               <div className="user-details">
-                <span className="username">{currentUser?.username || 'User'}</span>
+                <span className="username">{currentUser?.user_name || 'OpenPick'}</span>
                 <div className="user-stats">
-                  <span className="wallet-badge">Wallet:{currentUser?.wallet || 0}</span>
-                  <span className="premium-badge">Premium:{currentUser?.premium || 0}</span>
+                  <span className="wallet-badge">{currentUser?.user_type}</span>
+                  {/* <span className="premium-badge">Premium:{currentUser?.premium || 0}</span> */}
                 </div>
               </div>
               {showLogoutMenu && (
@@ -163,7 +209,7 @@ function App() {
                 </div>
               )}
             </div>
-          ) : (
+          ) : serverConnected ? (
             <div className="auth-buttons">
               <button 
                 className="login-button"
@@ -178,7 +224,7 @@ function App() {
                 Sign Up
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -220,13 +266,15 @@ function App() {
         {/* Main Content */}
         <div className="main-content">
           {activePage === 'home' ? (
-            <MainContent />
+            <MainContent activeTab={activePage} />
           ) : activePage === 'chatbot' ? (
             <ChatbotContent />
-          ) : activePage === 'marketplace' ? (
-            <MarketplaceContent />
+          ) : activePage === 'marketplace' && serverConnected ? (
+            <MarketplaceContent activeTab={activePage} />
+          ) : activePage === 'profile' && serverConnected ? (
+            <ProfileContent activeTab={activePage} />
           ) : (
-            <ProfileContent />
+            <MainContent activeTab={activePage} />
           )}
         </div>
       </div>
@@ -235,7 +283,7 @@ function App() {
       <LogStream />
 
       {/* Login Modal */}
-      {showLoginModal && (
+      {showLoginModal && serverConnected && (
         <div className="modal-overlay" onClick={() => setShowLoginModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -283,7 +331,7 @@ function App() {
       )}
 
       {/* Sign Up Modal */}
-      {showSignupModal && (
+      {showSignupModal && serverConnected && (
         <div className="modal-overlay" onClick={() => setShowSignupModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -341,7 +389,7 @@ function App() {
       )}
 
       {/* Email Verification Modal */}
-      {showVerifyModal && (
+      {showVerifyModal && serverConnected && (
         <div className="modal-overlay" onClick={() => setShowVerifyModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">

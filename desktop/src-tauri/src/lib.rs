@@ -3,6 +3,7 @@
 use tauri::{Builder, Manager};
 use tauri_plugin_store::{StoreBuilder};
 use tauri_plugin_dialog::init as init_dialog_plugin;
+use tauri_plugin_opener::init as init_opener_plugin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -27,6 +28,7 @@ pub fn run() {
     // 设置插件
     .plugin(tauri_plugin_store::Builder::default().build())
     .plugin(init_dialog_plugin())
+    .plugin(init_opener_plugin())
     .setup(|app| {
       // 在调试模式下启用日志插件
       if cfg!(debug_assertions) {
@@ -64,15 +66,32 @@ pub fn run() {
       commands::users::login,
       commands::users::register,
       commands::users::verify_email,
-      commands::users::get_user_profile,
+      commands::users::get_user_lastest_info,
       commands::users::logout,
       commands::users::check_login_status,
       commands::users::get_current_user_info,
-      
+      commands::users::get_wallet_balance,
+      commands::users::get_system_info,
+      commands::users::transfer_to,
+      commands::users::replace_private_key,
+      commands::users::get_max_transferable_balance,
+
       // Picker 相关命令
       commands::pickers::get_picker_marketplace,
       commands::pickers::get_picker_detail,
       commands::pickers::upload_picker,
+      commands::pickers::delete_picker,
+
+      // picker_payment_contract 相关命令
+      commands::picker_payment_contract::is_picker_operator,
+      commands::picker_payment_contract::query_picker_by_wallet,
+      commands::picker_payment_contract::register_picker,
+      commands::picker_payment_contract::remove_picker,
+      commands::picker_payment_contract::get_all_pickers,
+      commands::picker_payment_contract::get_all_operators,
+      commands::picker_payment_contract::grant_operator_role,
+      commands::picker_payment_contract::revoke_operator_role,
+      commands::picker_payment_contract::withdraw_funds,
       
       // 订单相关命令
       commands::orders::get_user_orders,
@@ -101,7 +120,8 @@ pub fn run() {
       commands::chatbot::list_chat_sessions,
       commands::chatbot::get_chat_session,
       commands::chatbot::delete_chat_session,
-      commands::chatbot::get_available_tools
+      commands::chatbot::get_available_tools,
+      commands::chatbot::save_parameters_to_file,
     ))
     // 运行应用
     .run(tauri::generate_context!())

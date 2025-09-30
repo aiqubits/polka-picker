@@ -16,13 +16,13 @@ async fn main() -> Result<(), AppError> {
     // 创建数据库连接池
     let pool = create_pool().await.map_err(|e| {
         error!("Failed to create database pool: {}", e);
-        AppError::InternalServerError
+        AppError::InternalServerError(format!("Failed to create database pool: {:?}", e))
     })?;
     
     // 初始化数据库
     init_database(&pool).await.map_err(|e| {
         error!("Failed to initialize database: {}", e);
-        AppError::InternalServerError
+        AppError::InternalServerError(format!("Failed to initialize database: {:?}", e))
     })?;
     
     // 创建应用状态
@@ -47,7 +47,6 @@ async fn main() -> Result<(), AppError> {
     // 启动服务器
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     info!("Server running on http://0.0.0.0:3000");
-    info!("Swagger UI available at: http://0.0.0.0:3000/swagger-ui/");
     info!("OpenAPI JSON available at: http://0.0.0.0:3000/api-docs/openapi.json");
     
     axum::serve(listener, app).await.unwrap();

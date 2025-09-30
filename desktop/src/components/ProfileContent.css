@@ -177,10 +177,11 @@
 /* 通用区域样式 */
 .recent-activity,
 .installed-tools,
-.account-stats {
+.account-manager {
   background-color: #1e293b;
   border-radius: 12px;
   padding: 20px;
+  position: relative;
 }
 
 .section-header {
@@ -311,8 +312,8 @@
   color: #ef4444;
 }
 
-/* 账户统计 */
-.stats-wallet {
+/* 账户管理 */
+.manage-wallet {
   margin-bottom: 20px;
 }
 
@@ -324,6 +325,14 @@
   padding: 12px;
   background-color: #334155;
   border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wallet-item:hover {
+  background-color: #475569;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .wallet-label {
@@ -623,4 +632,162 @@
 
 .modal-content::-webkit-scrollbar-thumb:hover {
   background: #64748b;
+}
+
+/* 自定义对话框样式 */
+.custom-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+  /* 确保遮罩层能够捕获所有点击事件 */
+  pointer-events: all;
+  /* 防止内容滚动 */
+  overflow: hidden;
+}
+
+/* 对话框容器 */
+.custom-dialog {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 0;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.2s ease;
+}
+
+/* 对话框头部 */
+.custom-dialog-header {
+  padding: 20px 20px 0 20px;
+  border-bottom: 1px solid #334155;
+}
+
+/* 对话框标题 */
+.custom-dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 0 0 10px 0;
+}
+
+/* 对话框内容区域 */
+.custom-dialog-body {
+  padding: 20px;
+}
+
+/* 对话框消息文本 */
+.custom-dialog-message {
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0 0 15px 0;
+}
+
+/* 对话框底部按钮区域 */
+.custom-dialog-footer {
+  padding: 0 20px 20px 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 对话框按钮 */
+.custom-dialog-button {
+  padding: 10px 20px;
+  background-color: #7c3aed;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  text-align: center;
+}
+
+/* 对话框按钮悬停效果 */
+.custom-dialog-button:hover {
+  background-color: #6d28d9;
+  transform: translateY(-1px);
+}
+
+/* 对话框按钮点击效果 */
+.custom-dialog-button:active {
+  transform: translateY(0);
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 上滑动画 */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 600px) {
+  .custom-dialog {
+    width: 95%;
+    margin: 10px;
+  }
+}
+
+/* 智能合约权限管理样式 */
+.contract-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.contract-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.contract-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  background-color: #334155;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.contract-input:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}
+
+.contract-input::placeholder {
+  color: #94a3b8;
 }

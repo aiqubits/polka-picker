@@ -1,8 +1,18 @@
 // API Service
 // 提供与 Tauri 后端通信的接口
 import { invoke } from '@tauri-apps/api/core';
-import type { ResponseUserInfo, RegisterResponse, UserInfo, PickerListResponse, CreateOrderResponse, OrderStatus, OrderListResponse, OrderInfo } from '../types';
-// import type { message } from '@tauri-apps/plugin-dialog';
+import type { UserSystemInfoResponse, RegisterResponse, UserInfo, SystemInfo, PickerListResponse, 
+  CreateOrderResponse, OrderStatus, OrderListResponse, OrderInfo, TransferToRequest, 
+  TransferToResponse, ReplacePrivateKeyRequest, ReplacePrivateKeyResponse } from '../types';
+
+// 服务器连接状态接口
+interface ConnectionStatus {
+  is_connected: boolean;
+  response_time_ms: number;
+  server_status: string;
+  auth_valid: boolean;
+  error_message: string | null;
+}
 
 // 模拟延迟
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -200,11 +210,11 @@ const localInstalledToolsDatabase: Record<string, InstalledTools> = {
 // API 服务类
 class APIService {
   // 用户认证相关接口, 登录, 注册, 注销, 验证 Done
-  async login(email: string, userPassword: string): Promise<ResponseUserInfo> {
+  async login(email: string, userPassword: string): Promise<UserSystemInfoResponse> {
     await delay(200)
     try {
       // 调用 Tauri 后端的 login 命令
-      const responseUserInfo = await invoke<ResponseUserInfo>('login', {
+      const responseUserInfo = await invoke<UserSystemInfoResponse>('login', {
         email, // 假设的测试邮箱
         userPassword // 假设的测试密码
       });
@@ -247,6 +257,34 @@ class APIService {
     } catch (error) {
       const errorMessage = error instanceof Error ? 
         (error.message || 'Check login status failed.') : 
+        (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+      throw new Error(errorMessage);
+    }
+  }
+
+  // 检查是否为开发用户
+  async checkDevUserStatus(): Promise<boolean> {
+    try {
+      const responseUserInfo = await this.getUserLastestInfo()
+      const isDevUser = responseUserInfo.user_type === 'dev'
+      return isDevUser;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? 
+        (error.message || 'Check dev user status failed.') : 
+        (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+      throw new Error(errorMessage);
+    }
+  }
+
+  // 检查服务器连接状态
+  async checkServerConnection(): Promise<ConnectionStatus> {
+    try {
+      // 调用 Tauri 后端的 api_connection 命令
+      const connectionStatus = await invoke<ConnectionStatus>('api_connection');
+      return connectionStatus;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? 
+        (error.message || 'Check server connection failed.') : 
         (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
       throw new Error(errorMessage);
     }
@@ -300,29 +338,18 @@ class APIService {
   }
 
   // 用户资料相关接口
-  async getUserProfile(): Promise<unknown> {
-    await delay(700)
+  async getCurrentUserInfo(): Promise<UserInfo> {
+    await delay(500)
 
     try {
-      // 调用 Tauri 后端的 get_user_profile 命令
-      const response = await invoke<UserInfo>('get_user_profile');
+      // 调用 Tauri 后端的 get_current_user_info 命令
+      const responseUserInfo = await invoke<UserInfo>('get_current_user_info');
 
-      if (!response) {
+      if (!responseUserInfo) {
         throw new Error('User not found')
       }
-
-      // 转换响应格式以保持与原有接口兼容
-      const userData = {
-        id: response.user_id,
-        email: response.email,
-        user_name: response.user_name,
-        avatar: response.user_name.substring(0, 2).toUpperCase(),
-        wallet_address: response.wallet_address,
-        premium_balance: response.premium_balance,
-        created_at: response.created_at
-      };
       
-      return userData;
+      return responseUserInfo;
     } catch (error) {
       const errorMessage = error instanceof Error ? 
         (error.message || 'Get user profile failed.') : 
@@ -331,12 +358,12 @@ class APIService {
     }
   }
 
-  async getCurrentUserInfo(): Promise<ResponseUserInfo> {
-    await delay(700)
+  async getUserLastestInfo(): Promise<UserInfo> {
+    await delay(500)
 
     try {
-      // 调用 Tauri 后端的 get_current_user_info 命令
-      const responseUserInfo = await invoke<ResponseUserInfo>('get_current_user_info');
+      // 调用 Tauri 后端的 get_user_lastest_info 命令
+      const responseUserInfo = await invoke<UserInfo>('get_user_lastest_info');
 
       if (!responseUserInfo) {
         throw new Error('User not found')
@@ -345,7 +372,27 @@ class APIService {
       return responseUserInfo
     } catch (error) {
       const errorMessage = error instanceof Error ? 
-        (error.message || 'Get current user info failed.') : 
+        (error.message || 'Get user lastest info failed.') : 
+        (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+      throw new Error(errorMessage);
+    }
+  }
+
+  async getSystemInfo(): Promise<SystemInfo> {
+    await delay(500)
+
+    try {
+      // 调用 Tauri 后端的 get_system_info 命令
+      const responseSystemInfo = await invoke<SystemInfo>('get_system_info');
+
+      if (!responseSystemInfo) {
+        throw new Error('System info not found')
+      }
+      
+      return responseSystemInfo;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? 
+        (error.message || 'Get system info failed.') : 
         (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
       throw new Error(errorMessage);
     }
@@ -433,14 +480,28 @@ class APIService {
     await delay(800)
 
     try {
-      // 调用 Tauri 后端的 upload_picker 命令
+      // 读取文件内容为ArrayBuffer，然后转换为Uint8Array以匹配后端的Vec<u8>类型
+      const fileArrayBuffer = await file.arrayBuffer();
+      const fileUint8Array = new Uint8Array(fileArrayBuffer);
+      
+      // 处理可选的图片文件
+      let imageUint8Array: Uint8Array | null = null;
+      if (image) {
+        const imageArrayBuffer = await image.arrayBuffer();
+        imageUint8Array = new Uint8Array(imageArrayBuffer);
+      }
+      
+      // 确保price是整数类型，匹配后端的i64
+      const priceAsInteger = Math.floor(price);
+      
+      // 按照Tauri后端要求，使用对象形式传递参数，确保包含正确的键名
       await invoke<string>('upload_picker', {
         alias,
         description,
         version,
-        price,
-        file: await file.arrayBuffer(),
-        image: image ? await image.arrayBuffer() : undefined,
+        price: priceAsInteger,
+        file: fileUint8Array,
+        image: imageUint8Array ? Array.from(imageUint8Array) : null
       });
 
       return 'Upload Picker success.';
@@ -501,8 +562,28 @@ class APIService {
     }
   }
 
+  // 删除 picker
+  async deletePicker(pickerId: string): Promise<string> {
+    await delay(800)
+
+    try {
+      // 调用 Tauri 后端的 delete_picker 命令
+      const deletePickerResponse = await invoke<string>('delete_picker', {
+        pickerId,
+      });
+
+      // 后端返回的响应可能是一个确认消息，我们直接返回
+      return deletePickerResponse || 'Picker deleted successfully';
+    } catch (error) {
+      const errorMessage = error instanceof Error ? 
+        (error.message || 'Delete Picker failed.') : 
+        (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+      throw new Error(errorMessage);
+    }
+  }
+
   // Picker 订单相关的接口
-  async createOrder(pickerid: string, paytype: string): Promise<string> {
+  async createOrder(pickerid: string, paytype: string): Promise<CreateOrderResponse> {
     await delay(800)
 
     try {
@@ -516,7 +597,7 @@ class APIService {
         throw new Error('Create Order failed.')
       }
       // "Order created successfully, Never close the client and wait for execution to complete!"
-      return createOrderResponse.token;
+      return createOrderResponse;
     } catch (error) {
       const errorMessage = error instanceof Error ? 
         (error.message || 'Create Order failed.') : 
@@ -591,79 +672,87 @@ class APIService {
       throw new Error(errorMessage);
     }
   }
-  
-//   // 聊天机器人相关接口
-//   async sendChatMessage(_sessionId: string, message: string): Promise<unknown> {
-//     await delay(1500) // 模拟AI响应时间
-    
-//     // 简单的响应逻辑，根据用户输入生成不同的回复
-//     let botResponse = ''
-//     let responseButtons = []
-    
-//     if (message.toLowerCase().includes('help')) {
-//       botResponse = 'I can help you with various tasks. What specific issue are you facing?'
-//       responseButtons = [
-//         { id: 'task_help', text: 'Task troubleshooting', action: 'task_troubleshoot' },
-//         { id: 'tool_help', text: 'Tool installation', action: 'tool_install' },
-//         { id: 'account_help', text: 'Account issues', action: 'account_issues' }
-//       ]
-//     } else if (message.toLowerCase().includes('tools')) {
-//       botResponse = 'We have various tools available in the marketplace. Here are some popular ones:'
-//       responseButtons = [
-//         { id: 'data_tool', text: 'Data Processing Tool', action: 'tool_data' },
-//         { id: 'monitor_tool', text: 'Server Monitoring', action: 'tool_monitor' },
-//         { id: 'backup_tool', text: 'Backup System Plugin', action: 'tool_backup' }
-//       ]
-//     } else if (message.toLowerCase().includes('hello') || message.toLowerCase().includes('hi')) {
-//       botResponse = 'Hello! How can I assist you today?'
-//       responseButtons = [
-//         { id: 'feature_req', text: 'Request a feature', action: 'feature_req' },
-//         { id: 'feedback', text: 'Provide feedback', action: 'feedback' }
-//       ]
-//     } else if (message.toLowerCase().includes('task') || message.toLowerCase().includes('pipeline')) {
-//       botResponse = 'I can help you create, manage, or troubleshoot tasks. What do you need help with specifically?'
-//       responseButtons = [
-//         { id: 'create_task', text: 'Create a new task', action: 'create_task' },
-//         { id: 'task_error', text: 'Fix task error', action: 'task_error' },
-//         { id: 'task_optimize', text: 'Optimize task', action: 'task_optimize' }
-//       ]
-//     } else {
-//       botResponse = `Thank you for your message: "${message}". I'm here to help you with any questions or issues you might have.`
-//       responseButtons = [
-//         { id: 'more_help', text: 'More assistance', action: 'more_help' },
-//         { id: 'contact_support', text: 'Contact support', action: 'contact_support' }
-//       ]
-//     }
-    
-//     return {
-//       success: true,
-//       message: {
-//         id: Date.now().toString(),
-//         content: botResponse,
-//         sender: 'bot',
-//         timestamp: new Date().toISOString(),
-//         type: 'text' as const,
-//         buttons: responseButtons
-//       }
-//     }
-//   }
-  
-  // 文件上传相关接口
-  async uploadFile(file: File): Promise<unknown> {
-    await delay(2000) // 模拟上传时间
-    
-    return {
-      success: true,
-      fileId: Date.now().toString(),
-      fileName: file.name,
-      fileSize: file.size,
-      uploadTime: new Date().toISOString()
+
+  async getWalletBalance(address: string, chain_url: string): Promise<number> {
+    await delay(500)
+    try {
+      // 调用 Tauri 后端的 get_wallet_balance 命令
+      const walletBalance = await invoke<number>('get_wallet_balance', {
+        address,
+        chainUrl: chain_url,
+      });
+
+      if (walletBalance === undefined) {
+        throw new Error('Get Wallet Balance failed.')
+      }
+
+      // 将余额从 wei 转换为 ether
+      const balanceInEther = Number(walletBalance);
+      return balanceInEther;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? 
+        (error.message || 'Get Wallet Balance failed.') : 
+        (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+      throw new Error(errorMessage);
     }
   }
 
 
-}
+  // 获取最大可转账余额
+  async getMaxTransferableBalance(address: string, chain_url: string): Promise<number> {
+    await delay(500)
+    try {
+      // 调用 Tauri 后端的 get_max_transferable_balance 命令
+      const maxTransferableBalance = await invoke<number>('get_max_transferable_balance', {
+        address,
+        chainUrl: chain_url,
+      });
 
+      if (maxTransferableBalance === undefined) {
+        throw new Error('Get Max Transferable Balance failed.')
+      }
+
+      // 将余额从 wei 转换为 ether
+      const balanceInEther = Number(maxTransferableBalance);
+      return balanceInEther;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? 
+        (error.message || 'Get Max Transferable Balance failed.') : 
+        (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+      throw new Error(errorMessage);
+    }
+  }
+
+
+  // 转账到指定地址
+  async transferTo(to_address: string, amount: string): Promise<TransferToResponse> {
+    try {
+      const convertAmount = Number(amount) * 1e18;
+      const request: TransferToRequest = { toAddress: to_address, amount: convertAmount.toString() };
+      const response = await invoke<TransferToResponse>('transfer_to', request as Record<string, string>);
+      return response;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? 
+          (error.message || 'Failed to transfer to address.') : 
+          (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+        throw new Error(errorMessage);
+    }
+  }
+
+  // 替换用户私钥 replace_private_key
+  async replacePrivateKey(request: ReplacePrivateKeyRequest): Promise<ReplacePrivateKeyResponse> {
+    try {
+      const response = await invoke<ReplacePrivateKeyResponse>('replace_private_key', request as Record<string, string>);
+      return response;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? 
+          (error.message || 'Failed to replace private key.') : 
+          (typeof error === 'string' ? error : JSON.stringify(error) || 'Please try again.');
+        throw new Error(errorMessage);
+    }
+  }
+
+}
 // 导出单例实例
 export const clientAPI = new APIService()
 

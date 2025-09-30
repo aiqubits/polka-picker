@@ -15,6 +15,9 @@
     "@tauri-apps/plugin-dialog": "^2.4.0",
     "@tauri-apps/plugin-opener": "^2.5.0",
     "@tauri-apps/plugin-shell": "^2.3.1",
+    "@types/qrcode.react": "^1.0.5",
+    "ethers": "^6.15.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

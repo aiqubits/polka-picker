@@ -133,7 +133,7 @@ async function verifyEmail(email: string, code: string): Promise<void> {
 }
 ```
 
-### 4. 获取用户资料 (get_user_profile)
+### 4. 获取用户资料 (get_user_lastest_info)
 
 **功能**: 获取当前登录用户的详细资料
 
@@ -159,10 +159,10 @@ interface UserInfo {
 
 async function getUserProfile(): Promise<UserInfo> {
   try {
-    const profile = await invoke<UserInfo>('get_user_profile')
+    const profile = await invoke<UserInfo>('get_user_lastest_info')
     return profile
   } catch (error) {
-    throw new Error(`获取用户资料失败: ${error}`)
+    throw new Error(`获取用户最新资料失败: ${error}`)
   }
 }
 ```

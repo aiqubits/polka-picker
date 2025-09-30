@@ -1,5 +1,5 @@
 // 基于MCP的AI Agent聊天机器人示例
-use rust_agent::{run_agent, ChatModel, OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent};
+use rust_agent::{run_agent, OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent};
 use std::sync::Arc;
 use std::collections::HashMap;
 use chrono;
@@ -16,7 +16,7 @@ async fn main() {
     
     // 创建OpenAI模型实例 - 支持Openai兼容 API
     let model = OpenAIChatModel::new(api_key.clone(), base_url)
-        .with_model("kimi-k2-0905-preview".to_string())
+        .with_model(std::env::var("OPENAI_API_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string()))
         .with_temperature(0.6)
         .with_max_tokens(8*1024);
     
@@ -117,20 +117,18 @@ fn parse_and_calculate(expression: &str) -> Result<f64, Error> {
         println!("Using mock tools instead...");
     }
 
-    println!("Using model: {}", model.model_name().unwrap_or("Model not specified"));
+    println!("Using model: {}", model.model_name().map_or("Model not specified", |v| v));
     println!("Using API URL: {}", model.base_url());
     println!("----------------------------------------");
     
     let client_arc: Arc<dyn McpClient> = Arc::new(mcp_client);
     
     // 创建Agent实例，并传递temperature和max_tokens参数
-    let mut agent = McpAgent::new(
+    let mut agent = McpAgent::with_openai_model(
         client_arc.clone(),
-        model.model_name().unwrap_or("kimi-k2-0905-preview").to_string(),
-        "You are an AI assistant that can use tools to answer user questions. Please decide whether to use tools based on the user's needs.".to_string()
-    )
-    .with_temperature(0.6f32)  // 使用与模型相同的温度设置，显式指定为f32类型
-    .with_max_tokens(100*1024);  // 使用与模型相同的最大令牌数
+        "You are an AI assistant that can use tools to answer user questions. Please decide whether to use tools based on the user's needs.".to_string(),
+        model.clone()
+    );
     
     // 自动从MCP客户端获取工具并添加到Agent
     if let Err(e) = agent.auto_add_tools().await {

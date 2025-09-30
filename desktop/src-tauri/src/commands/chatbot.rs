@@ -1,5 +1,5 @@
 use tauri::{command, State};
-use rust_agent::{ChatModel, OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, run_agent};
+use rust_agent::{OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, run_agent};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
@@ -7,9 +7,11 @@ use serde::{Serialize, Deserialize};
 use serde_json::{Value, json};
 use chrono;
 use anyhow::Error;
-use log::info;
+use log::{info, error};
 use super::task::{list_tasks, run_task};
 use tauri::AppHandle;
+
+use crate::config::AppConfig;
 
 // 定义会话状态结构体
 #[derive(Default, Clone)]
@@ -83,7 +85,7 @@ pub async fn send_chat_message(state: State<'_, Arc<Mutex<ChatbotState>>>, reque
             }
         },
         None => {
-            Err("Session does not exist".to_string())
+            Err("Session does not exist. Please New Session.".to_string())
         }
     }
 }
@@ -295,8 +297,7 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
     
     // 连接到 MCP 服务器
     if let Err(e) = mcp_client.connect(&mcp_url).await {
-        println!("Failed to connect to MCP server: {}", e);
-        println!("Using mock tools instead...");
+        error!("Failed to connect to MCP server: {}", e);
     }
     
     // 把 mcp_client 转换为Arc<dyn McpClient>
@@ -307,27 +308,42 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
 
 // 创建新的Agent实例
 async fn create_agent(mcp_client: Arc<dyn McpClient>) -> Result<McpAgent, Error> {
-    // 从环境变量获取API密钥和基本URL
-    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "OPENAI_API_KEY".to_string());
-    let base_url = std::env::var("OPENAI_API_URL").ok();
-    let model_name = std::env::var("OPENAI_API_MODEL").unwrap_or_else(|_| "".to_string());
+    // 从配置文件和环境变量中获取API密钥、基本URL和模型名称
+    // let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "OPENAI_API_KEY".to_string());
+    // let base_url = std::env::var("OPENAI_API_URL").ok();
+    // let model_name = std::env::var("OPENAI_API_MODEL").unwrap_or_else(|_| "".to_string());
+
+    let config = AppConfig::load().unwrap_or_else(|_| AppConfig::default());
+    println!("config: {:?}", config);
+    let api_key = config.ai_api_key;
+    let base_url = if config.ai_api_url.is_empty() { 
+        None 
+    } else { 
+        Some(config.ai_api_url) 
+    };
+    // chatgpt-4o
+    let model_name = config.ai_model;
+
+    println!("api_key rs : {:?}", api_key);
+    println!("base_url rs : {:?}", base_url);
+    println!("model_name rs : {:?}", model_name);
     
-    // 创建OpenAI模型实例 - 支持MoonShot API
+    // 创建OpenAI模型实例 - 支持OpenAI API
     let model = OpenAIChatModel::new(api_key.clone(), base_url)
-        .with_model(model_name.clone());
+        .with_model(model_name.clone())
+        .with_temperature(0.6f32)
+        .with_max_tokens(8*1024);
     
     // 创建Agent实例
-    let mut agent = McpAgent::new(
+    let mut agent = McpAgent::with_openai_model(
         mcp_client.clone(),
-        model.model_name().unwrap_or("chatgpt-4o").to_string(),
-        "You are an AI assistant who can use tools to answer user questions. Please decide whether to use tools based on user needs.".to_string()
-    )
-    .with_temperature(0.6f32)
-    .with_max_tokens(8*1024);
-    
+        "You are an AI assistant who can use tools to answer user questions. Please decide whether to use tools based on user needs.".to_string(),
+        model.clone()
+    );
+
     // 自动从MCP客户端获取工具并添加到Agent
     if let Err(e) = agent.auto_add_tools().await {
-        println!("Failed to auto add tools to McpAgent: {}", e);
+        error!("Failed to auto add tools to McpAgent: {}", e);
     }
     
     Ok(agent)
@@ -358,7 +374,7 @@ pub async fn create_chat_session(state: State<'_, Arc<Mutex<ChatbotState>>>) -> 
     let mut chatbot_state = state.lock().await;
     
     // 确保MCP客户端已初始化
-    let mcp_client = chatbot_state.mcp_client.clone().ok_or_else(|| "MCP客户端未初始化".to_string())?;
+    let mcp_client = chatbot_state.mcp_client.clone().ok_or_else(|| "MCP client is not initialized".to_string())?;
     
     // 生成会话ID
     let session_id = format!("session_{}", chrono::Utc::now().timestamp_millis());
@@ -386,7 +402,7 @@ pub async fn get_available_tools(state: State<'_, Arc<Mutex<ChatbotState>>>) -> 
     let chatbot_state = state.lock().await;
     
     // 确保MCP客户端已初始化
-    let mcp_client = chatbot_state.mcp_client.clone().ok_or_else(|| "MCP客户端未初始化".to_string())?;
+    let mcp_client = chatbot_state.mcp_client.clone().ok_or_else(|| "MCP client is not initialized".to_string())?;
     
     // 获取工具列表
     match mcp_client.get_tools().await {
@@ -437,4 +453,39 @@ pub async fn get_chat_session(state: State<'_, Arc<Mutex<ChatbotState>>>, sessio
     } else {
         Err(format!("Session {} does not exist", session_id))
     }
+}
+
+// 定义保存参数请求结构体
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SaveParametersRequest {
+    pub ai_api_url: Option<String>,
+    pub ai_api_key: Option<String>,
+    pub ai_model: Option<String>,
+}
+
+// 实现 Tauri 命令：保存参数到文件
+#[command]
+pub async fn save_parameters_to_file(request: SaveParametersRequest) -> Result<(), String> {
+    println!("Saving parameters rs: {:?}", request);
+    // 通过 config 加载当前配置
+    let mut config = AppConfig::load().unwrap_or_else(|e| {
+        error!("Failed to load config: {}", e);
+        AppConfig::default()
+    });
+    
+    // 从请求中提取参数并更新配置
+    if let Some(ai_api_url) = request.ai_api_url {
+        config.ai_api_url = ai_api_url;
+    }
+    if let Some(ai_api_key) = request.ai_api_key {
+        config.ai_api_key = ai_api_key;
+    }
+    if let Some(ai_model) = request.ai_model {
+        config.ai_model = ai_model;
+    }
+    println!("Saving parameters rs: {:?}", config);
+    // 保存更新后的配置
+    config.save().map_err(|e| e.to_string())?;
+    
+    Ok(())
 }

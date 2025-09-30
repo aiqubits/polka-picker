@@ -5,7 +5,7 @@ import { taskAPI, type TaskLog } from '../client/taskApi'
 interface LogEntry {
   id: string
   message: string
-  type: 'error' | 'warning' | 'info'
+  type: 'error' | 'warn' | 'info' | 'warning'
   timestamp: number
   taskId: string
 }
@@ -14,13 +14,17 @@ const LogStream = () => {
   // 动态日志数据
   const [logs, setLogs] = useState<LogEntry[]>([])
   
+  // 添加会话ID和序列号计数器，确保ID唯一性
+  const sessionIdRef = useRef<string>(Date.now().toString())
+  const logSequenceRef = useRef<number>(0)
+  
   // 存储每个任务的最新日志条目ID，用于防止重复
-  // const latestLogIdsRef = useRef<Map<string, number>>(new Map())
+  const latestLogIdsRef = useRef<Map<string, string>>(new Map())
 
   // 筛选状态
   const [filters, setFilters] = useState({
     error: true,
-    warning: true,
+    warn: true,
     info: true,
   })
 
@@ -31,33 +35,38 @@ const LogStream = () => {
   const [resizing, setResizing] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // 添加日志的方法
+  // 添加日志的方法 - 使用更唯一的ID生成方式
+  // 在addLog函数中添加类型转换
   const addLog = (taskLog: TaskLog) => {
-    setLogs(prev => {
-      // 限制日志数量，避免内存占用过大
-      const MAX_LOGS = 500
-      const newLogs = [...prev]
-      
-      // 创建新的日志条目
-      const logEntry: LogEntry = {
-        id: `${taskLog.task_id}-${taskLog.timestamp}`,
-        message: taskLog.message,
-        type: taskLog.type, // 直接使用原始类型，不再做错误的映射
-        timestamp: taskLog.timestamp,
-        taskId: taskLog.task_id
-      }
-      
-      // 添加到日志数组开头
-      newLogs.unshift(logEntry)
-      
-      // 如果超过最大日志数量，移除最旧的日志
-      if (newLogs.length > MAX_LOGS) {
-        newLogs.splice(MAX_LOGS)
-      }
-      
-      return newLogs
-    })
-  }
+  
+  setLogs(prev => {
+    // 限制日志数量，避免内存占用过大
+    const MAX_LOGS = 500
+    const newLogs = [...prev]
+    
+    // 生成唯一ID：会话ID + 递增序列 + 任务ID + 时间戳
+    const uniqueId = `${taskLog.task_id}-${taskLog.timestamp}-${sessionIdRef.current}-${logSequenceRef.current++}`
+    
+    // 创建新的日志条目时使用转换后的类型
+    const logEntry: LogEntry = {
+      id: uniqueId,
+      message: taskLog.message,
+      type: taskLog.type,
+      timestamp: taskLog.timestamp,
+      taskId: taskLog.task_id
+    };
+    
+    // 添加到日志数组开头
+    newLogs.unshift(logEntry)
+    
+    // 如果超过最大日志数量，移除最旧的日志
+    if (newLogs.length > MAX_LOGS) {
+      newLogs.splice(MAX_LOGS)
+    }
+    
+    return newLogs
+  })
+}
 
   // 监听日志事件
   useEffect(() => {
@@ -68,7 +77,6 @@ const LogStream = () => {
           addLog(log)
         })
         
-        console.log('Log listener initialized')
       } catch (error) {
         console.error('Failed to initialize log listener:', error)
       }
@@ -85,7 +93,7 @@ const LogStream = () => {
   // 筛选后的日志
   const filteredLogs = logs.filter(log => {
     if (log.type === 'error') return filters.error
-    if (log.type === 'warning') return filters.warning
+    if (log.type === 'warn') return filters.warn
     if (log.type === 'info') return filters.info
     return true
   })
@@ -94,8 +102,6 @@ const LogStream = () => {
   const copyLogs = () => {
     const logText = filteredLogs.map(log => `${log.type.toUpperCase()}: ${log.message}`).join('\n')
     navigator.clipboard.writeText(logText).then(() => {
-      // 可以添加复制成功的提示
-      console.log('Logs copied to clipboard')
     })
   }
 
@@ -150,6 +156,18 @@ const LogStream = () => {
     }
   }, [resizing])
 
+  // 改进的清空日志函数 - 使用新的会话ID和重置序列号
+  const clearLogs = () => {
+    // 生成新的会话ID
+    sessionIdRef.current = Date.now().toString()
+    // 重置序列号
+    logSequenceRef.current = 0
+    // 清空日志记录
+    latestLogIdsRef.current.clear()
+    // 清空显示的日志
+    setLogs([])
+  }
+
   return (
     <>
       {isMinimized ? (
@@ -166,71 +184,81 @@ const LogStream = () => {
         >
           {/* 顶部控制栏 */}
           <div className="log-header">
-            <div className="log-header-left">
-              <span className="log-header-title">Log Stream</span>
-            </div>
+            {/* 左侧Clear按钮 */}
+            <button 
+              className="log-action-button clear-button"
+              onClick={clearLogs}
+              title="Clear Logs"
+            >
+              <span className="action-icon">🗑️</span>
+            </button>
             
-            {/* 筛选器按钮 */}
-            <div className="log-filters">
-              <div className="filter-dropdown">
-                <button className="filter-button">
-                  <span className="filter-icon">🔍</span>
-                </button>
-                <div className="filter-dropdown-content">
-                  <label className="filter-option">
-                    <input 
-                      type="checkbox" 
-                      checked={filters.error} 
-                      onChange={() => toggleFilter('error')}
-                    />
-                    ERROR
-                  </label>
-                  <label className="filter-option">
-                    <input 
-                      type="checkbox" 
-                      checked={filters.warning} 
-                      onChange={() => toggleFilter('warning')}
-                    />
-                    WARN
-                  </label>
-                  <label className="filter-option">
-                    <input 
-                      type="checkbox" 
-                      checked={filters.info} 
-                      onChange={() => toggleFilter('info')}
-                    />
-                    INFO
-                  </label>
+            {/* 完全居中的标题 - 使用绝对定位 */}
+            <span className="log-header-title absolute-centered">Log Stream</span>
+            
+            {/* 右侧控件区域 */}
+            <div className="log-controls-right">
+              {/* 筛选器按钮 */}
+              <div className="log-filters">
+                <div className="filter-dropdown">
+                  <button className="filter-button">
+                    <span className="filter-icon">🔍</span>
+                  </button>
+                  <div className="filter-dropdown-content">
+                    <label className="filter-option">
+                      <input 
+                        type="checkbox" 
+                        checked={filters.error} 
+                        onChange={() => toggleFilter('error')}
+                      />
+                      ERROR
+                    </label>
+                    <label className="filter-option">
+                      <input 
+                        type="checkbox" 
+                        checked={filters.warn} 
+                        onChange={() => toggleFilter('warn')}
+                      />
+                      WARN
+                    </label>
+                    <label className="filter-option">
+                      <input 
+                        type="checkbox" 
+                        checked={filters.info} 
+                        onChange={() => toggleFilter('info')}
+                      />
+                      INFO
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            {/* 操作按钮 */}
-            <div className="log-actions">
-              <button 
-                className="log-action-button copy-button" 
-                onClick={copyLogs}
-                title="Copy"
-              >
-                <span className="action-icon">📋</span>
-              </button>
               
-              <button 
-                className="log-action-button expand-button" 
-                onClick={toggleExpand}
-                title={isExpanded ? "Return To Normal" : "Full Screen"}
-              >
-                <span className="action-icon">{isExpanded ? '⬇️' : '⬆️'}</span>
-                {/* {isExpanded ? 'Recovery' : 'Expand'} */}
-              </button>
-              
-              <button 
-                className="log-action-button close-button" 
-                onClick={toggleMinimize}
-                title="Close Panel"
-              >
-                <span className="action-icon">✕</span>
-              </button>
+              {/* 操作按钮 */}
+              <div className="log-actions">
+                <button 
+                  className="log-action-button copy-button" 
+                  onClick={copyLogs}
+                  title="Copy"
+                >
+                  <span className="action-icon">📋</span>
+                </button>
+                
+                <button 
+                  className="log-action-button expand-button" 
+                  onClick={toggleExpand}
+                  title={isExpanded ? "Return To Normal" : "Full Screen"}
+                >
+                  <span className="action-icon">{isExpanded ? '⬇️' : '⬆️'}</span>
+                </button>
+                
+                <button 
+                  className="log-action-button close-button" 
+                  onClick={toggleMinimize}
+                  title="Close Panel"
+                >
+                  <span className="action-icon">✕</span>
+                </button>
+              </div>
             </div>
           </div>
           
@@ -257,11 +285,11 @@ const LogStream = () => {
                       <div key={entry.id} className={`log-entry ${entry.type}`}>
                         <span className="log-time">[{time}]</span>
                         <span className={`log-level ${entry.type}`}>
-                          {entry.type.toUpperCase()}
+                          {entry.type === 'warning' ? 'WARN' : entry.type}
                         </span>
                         {entry.taskId && (
                           <span className="log-task-id">
-                            [Task: {entry.taskId.slice(0, 8)}...]
+                            [{entry.taskId.slice(0, 8)}]
                           </span>
                         )}
                         <span className="log-prefix">&gt;</span>

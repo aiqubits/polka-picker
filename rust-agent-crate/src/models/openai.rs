@@ -81,6 +81,7 @@ enum OpenAIApiType {
 }
 
 // OpenAI模型实现 - 支持多种API格式
+#[derive(Clone)]
 pub struct OpenAIChatModel {
     client: Client,
     api_key: String,
@@ -107,6 +108,26 @@ impl OpenAIChatModel {
             additional_headers: HashMap::new(),
             additional_params: HashMap::new(),
         }
+    }
+
+    /// 获取模型名称
+    pub fn model_name(&self) -> Option<&String> {
+        self.model_name.as_ref()
+    }
+
+    /// 获取基础URL
+    pub fn base_url(&self) -> &String {
+        &self.base_url
+    }
+
+    /// 获取温度参数
+    pub fn temperature(&self) -> Option<f32> {
+        self.temperature
+    }
+
+    /// 获取最大令牌数
+    pub fn max_tokens(&self) -> Option<u32> {
+        self.max_tokens
     }
 
     /// 设置模型名称
@@ -251,7 +272,7 @@ impl ChatModel for OpenAIChatModel {
             // 构建请求体
             let mut request_body = serde_json::json!({
                 "messages": openai_messages,
-                "model": model_name.unwrap_or("".to_string()),
+                "model": model_name.clone().unwrap_or("".to_string()),
             });
 
             // 添加可选参数
@@ -269,7 +290,7 @@ impl ChatModel for OpenAIChatModel {
 
             // 构建完整的API路径，将base_url与具体端点拼接
             let api_url = format!("{}/chat/completions", base_url);
-
+            
             // 构建请求
             let mut request = client.post(&api_url)
                 .header("Authorization", format!("Bearer {}", api_key))
@@ -287,7 +308,7 @@ impl ChatModel for OpenAIChatModel {
             let status = response.status();
             if !status.is_success() {
                 let error_text = response.text().await?;
-                return Err(Error::msg(format!("API请求失败: {} - {}", status, error_text)));
+                return Err(Error::msg(format!("API request failed: {} - {}", status, error_text)));
             }
 
             // 解析响应

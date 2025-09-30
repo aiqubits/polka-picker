@@ -1,3 +1,4 @@
+import { Window } from '@tauri-apps/api/window';
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -24,36 +25,46 @@ const cleanupTokenOnClose = async () => {
 }
 
 // 获取当前窗口实例
-const mainWindow = getCurrentWindow()
+let mainWindow: Window | null = null;
+
+try {
+  mainWindow = getCurrentWindow();
+} catch (error) {
+  console.warn('Failed to get current window, continuing without window events:', error);
+}
 
 // 添加标志变量防止循环调用
 let isClosing = false
 
 // 添加窗口关闭事件监听
-mainWindow.onCloseRequested(async (event) => {
- // 如果已经在关闭过程中，直接允许关闭
-  if (isClosing) {
-    return
-  }
+if (mainWindow && mainWindow.onCloseRequested) {
+  mainWindow.onCloseRequested(async (event) => {
+    // 如果已经在关闭过程中，直接允许关闭
+    if (isClosing) {
+      return
+    }
 
-  // 阻止默认关闭行为
-  event.preventDefault()
-  
-  // 设置标志表示正在关闭
-  isClosing = true
+    // 阻止默认关闭行为
+    if (event && event.preventDefault) {
+      event.preventDefault()
+    }
+    
+    // 设置标志表示正在关闭
+    isClosing = true
 
-  try {
-    // 执行清理Token的操作
-    await cleanupTokenOnClose()
-  } catch (error) {
-    console.error('Error during cleanup:', error)
-  } finally {
-    // 完成后关闭窗口
-    mainWindow.close()
-  }
-  
-
-})
+    try {
+      // 执行清理Token的操作
+      await cleanupTokenOnClose()
+    } catch (error) {
+      console.error('Error during cleanup:', error)
+    } finally {
+      // 完成后关闭窗口
+      if (mainWindow && mainWindow.close) {
+        mainWindow.close()
+      }
+    }
+  })
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

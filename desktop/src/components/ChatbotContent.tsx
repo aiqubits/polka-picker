@@ -1,7 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { ChatMessage, ChatbotSession } from '../types';
 import * as chatbotApi from '../client/chatBotApi';
 import './ChatbotContent.css';
+
+// 定义默认API设置
+const DEFAULT_API_SETTINGS = {
+  url: 'https://api.openai.com/v1/chat/completions',
+  key: 'sk-00000000000000000000000000000000',
+  model: 'gpt-3.5-turbo'
+};
 
 // localStorage键名常量
 const STORAGE_KEYS = {
@@ -22,6 +29,13 @@ const ChatbotContent = () => {
   const [isInitialized, setIsInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // API设置对话框相关状态
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [apiSettings, setApiSettings] = useState({
+    url: '',
+    key: '',
+    model: ''
+  });
 
   // 从localStorage加载状态
   const loadStateFromStorage = (): void => {
@@ -46,8 +60,18 @@ const ChatbotContent = () => {
       if (savedMessages) {
         setSessionMessages(JSON.parse(savedMessages));
       }
+      
+      // 加载API设置或使用默认值
+      const savedApiSettings = localStorage.getItem('chatbot_api_settings');
+      if (savedApiSettings) {
+        setApiSettings(JSON.parse(savedApiSettings));
+      } else {
+        setApiSettings(DEFAULT_API_SETTINGS);
+      }
     } catch (error) {
       console.error('Failed to load state from localStorage:', error);
+      // 如果加载失败，使用默认API设置
+      setApiSettings(DEFAULT_API_SETTINGS);
     }
   };
 
@@ -57,6 +81,8 @@ const ChatbotContent = () => {
       localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, activeSession);
       localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
       localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(sessionMessages));
+      // 保存API设置
+      localStorage.setItem('chatbot_api_settings', JSON.stringify(apiSettings));
     } catch (error) {
       console.error('Failed to save state to localStorage:', error);
     }
@@ -86,12 +112,9 @@ const ChatbotContent = () => {
         // 注意：这里不设置错误消息，因为我们总是要删除本地会话
       }
       
-      // 即使出错，也记录日志
-      console.log('Failed to delete chat session:', errorMessage);
     }
     
     // 无论API调用是否成功，都从本地删除会话
-    console.log('From local storage, delete chat session:', sessionId);
     updateLocalSessionState(sessionId);
   };
 
@@ -196,6 +219,46 @@ const ChatbotContent = () => {
         }))
       }
     }
+  };
+
+  // 显示API设置对话框
+  const handleApiSettingsClick = () => {
+    // 每次打开对话框时，确保使用最新的API设置
+    const savedApiSettings = localStorage.getItem('chatbot_api_settings');
+    if (savedApiSettings) {
+      try {
+        setApiSettings(JSON.parse(savedApiSettings));
+      } catch (error) {
+        console.error('Failed to parse saved API settings:', error);
+        // 如果解析失败，使用当前状态的值
+      }
+    }
+    setDialogVisible(true);
+  };
+
+  // 关闭对话框
+  const closeDialog = () => {
+    setDialogVisible(false);
+  };
+
+  // 保存API设置
+  const saveApiSettings = async () => {
+    try {
+      await chatbotApi.saveParametersToFile(
+        {
+          ai_api_url: apiSettings.url,
+          ai_api_key: apiSettings.key,
+          ai_model: apiSettings.model,
+        }
+      );
+    } catch (error) {
+      console.error('Failed to save API settings:', error);
+      setError('Failed to save API settings');
+      return;
+    }
+    
+    console.log('API Settings saved:', apiSettings);
+    setDialogVisible(false);
   };
 
   // 修改handleSendMessage函数，使用当前会话的消息历史
@@ -355,7 +418,7 @@ const ChatbotContent = () => {
       // 创建新会话对象
       const newSession: ChatbotSession = {
         id: newSessionId,
-        title: 'New Conversation',
+        title: 'Conversation',
         createdAt: new Date().toISOString(),
         lastMessage: ''
       };
@@ -574,6 +637,76 @@ const ChatbotContent = () => {
           <button onClick={() => setError(null)}>关闭</button>
         </div>
       )}
+
+      {/* 自定义对话框组件 */}
+      {dialogVisible && (
+        <div 
+          className="custom-dialog-overlay"
+          onClick={closeDialog}
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="custom-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="custom-dialog-header">
+              <h3 className="custom-dialog-title">API Settings</h3>
+            </div>
+            <div className="custom-dialog-body">
+              {/* API设置表单 */}
+              <div className="api-settings-form">
+                <div className="form-group">
+                  <label>URL</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={apiSettings.url}
+                    onChange={(e) => setApiSettings({...apiSettings, url: e.target.value})}
+                    placeholder="Enter API URL"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Key</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={apiSettings.key}
+                    onChange={(e) => setApiSettings({...apiSettings, key: e.target.value})}
+                    placeholder="Enter API Key"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Model</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={apiSettings.model}
+                    onChange={(e) => setApiSettings({...apiSettings, model: e.target.value})}
+                    placeholder="Enter Model Name"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="custom-dialog-footer" style={{ justifyContent: 'right', gap: '16px' }}>
+              {/* 取消按钮 */}
+              <button 
+                className="custom-dialog-button"
+                onClick={closeDialog}
+                style={{ backgroundColor: '#6b7280' }} /* 中性色 */
+              >
+                Cancel
+              </button>
+              {/* 确认按钮 */}
+              <button 
+                className="custom-dialog-button"
+                onClick={saveApiSettings}
+                disabled={!apiSettings.url || !apiSettings.key || !apiSettings.model}
+                style={!apiSettings.url || !apiSettings.key || !apiSettings.model ? 
+                  { backgroundColor: '#cccccc', cursor: 'not-allowed' } : {}}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* 加载状态 - 保持功能但样式与老版本兼容 */}
       {!isInitialized && (
@@ -677,23 +810,28 @@ const ChatbotContent = () => {
 
       {/* Input Area */}
       <div className="chat-input-area">
-        <div className="chat-input-container">
-          <input
-            type="text"
-            className="chat-input"
-            placeholder="Type your message..."
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            disabled={isTyping || !isInitialized}
-          />
-          <button
-            className="send-btn"
-            onClick={handleSendMessage}
-            disabled={!inputMessage.trim() || isTyping || !isInitialized}
-          >
-            ➤
+        <div className="input-controls">
+          <button className="api-settings-btn" onClick={handleApiSettingsClick}>
+            API Settings
           </button>
+          <div className="chat-input-container">
+            <input
+              type="text"
+              className="chat-input"
+              placeholder="Type your message..."
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+              disabled={isTyping || !isInitialized}
+            />
+            <button
+              className="send-btn"
+              onClick={handleSendMessage}
+              disabled={!inputMessage.trim() || isTyping || !isInitialized}
+            >
+              ➤
+            </button>
+          </div>
         </div>
       </div>
     </div>

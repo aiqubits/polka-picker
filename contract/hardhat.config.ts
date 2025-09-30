@@ -53,6 +53,7 @@ const config: HardhatUserConfig = {
   verify:{
     etherscan: {
       apiKey: "234234234324234234",
+      enabled: true,
     }
   }
 };

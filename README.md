@@ -1,6 +1,6 @@
 # Picker - AI Powered Smart System for Reliability and Usability in Next Generation Decentralized Internet
 
-![Picker Logo](./desktop/public/test_image.jpg)
+![Picker Logo](./desktop/public/picker_white.jpg)
 
 Picker is an innovative open-source project dedicated to building next-generation decentralized internet smart systems by combining AI technology, blockchain, and local computing to provide highly reliable and user-friendly services.
 

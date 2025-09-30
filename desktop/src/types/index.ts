@@ -9,15 +9,46 @@ export interface UserInfo {
   created_at: string
 }
 
-export interface ResponseUserInfo {
+
+export interface TransferToRequest {
+  toAddress: string;
+  amount: string;
+  [key: string]: unknown;
+}
+
+export interface TransferToResponse {
+  success: boolean;
+  tx_hash_url: string;
+  [key: string]: unknown;
+}
+
+export interface ReplacePrivateKeyRequest {
+  oldWalletAddress: string;
+  newPrivateKey: string;
+  [key: string]: unknown;
+}
+
+export interface ReplacePrivateKeyResponse {
+  message: string;
+  [key: string]: unknown;
+}
+
+// 定义系统信息的类型
+export interface SystemInfo {
   chain_name: string,
-  premium_free: number,
+  chain_url: string,
+  explorer_url: string,
   premium_payment_rate: number,
-  premium_toUsd: number,
+  premium_to_usd: number,
+  premium_free: number,
   premium_period: number,
   premium_start: boolean,
+}
+
+export interface UserSystemInfoResponse {
   wallet_balance: number,
-  user_info: UserInfo
+  user_info: UserInfo,
+  system_info: SystemInfo,
 }
 
 export interface RegisterResponse {

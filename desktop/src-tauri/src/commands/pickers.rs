@@ -6,6 +6,7 @@ use crate::config::AppConfig;
 use crate::utils::auth::AuthManager;
 use std::collections::HashMap;
 use tauri::State;
+use log::error;
 
 // 获取 Picker 市场列表命令
 #[tauri::command]
@@ -56,8 +57,8 @@ pub async fn get_picker_detail(
             config
         },
         Err(err) => {
+            error!("Error loading config: {:?}", err);
             let default_config = AppConfig::default();
-            
             default_config
         }
     };
@@ -97,8 +98,8 @@ pub async fn upload_picker(
 ) -> Result<String, String> {
     let config = AppConfig::load().unwrap_or_else(|_| AppConfig::default());
     let api_client = ApiClient::new(&config, Some(auth_manager.inner().clone()));
-    
-    // 调用文件上传方法    
+    println!("upload_picker command");
+    // 调用文件上传方法 
     let upload_response: UploadPickerResponse = api_client.upload_file(
         "/api/pickers",
         &alias,
@@ -111,3 +112,23 @@ pub async fn upload_picker(
     
     Ok(upload_response.message)
 }
+
+#[tauri::command]
+pub async fn delete_picker(
+    picker_id: String,
+    auth_manager: State<'_, AuthManager>,
+) -> Result<String, String> {
+    let config = AppConfig::load().unwrap_or_else(|_| AppConfig::default());
+    let api_client = ApiClient::new(&config, Some(auth_manager.inner().clone()));
+    
+    // 构建API路径
+    let path = format!("/api/pickers/{}", picker_id);
+    
+    // 调用API客户端的delete方法
+    match api_client.delete::<String>(&path).await {
+        Ok(response) => Ok(response),
+        Err(err) => Err(err.to_string())
+    }
+}
+
+// 后端合约接口命令

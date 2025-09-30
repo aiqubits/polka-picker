@@ -16,6 +16,8 @@
         "title": "Picker - AI powered Smart System for Anything",
         "width": 800,
         "height": 600,
+        "minWidth": 800,
+        "minHeight": 600,
         "resizable": true,
         "fullscreen": false
       }
@@ -23,6 +25,9 @@
     "security": {
       "csp": null
     }
+  },
+  "plugins": {
+    "opener": {}
   },
   "bundle": {
     "active": true,

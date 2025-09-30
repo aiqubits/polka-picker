@@ -647,7 +647,7 @@ impl TaskManager {
         // 确保扫描目录存在
         if !scan_directory.exists() {
             if let Err(e) = fs::create_dir_all(&scan_directory) {
-                eprintln!("Failed to create scan directory '{}': {:?}", scan_directory.display(), e);
+                error!("Failed to create scan directory '{}': {:?}", scan_directory.display(), e);
             }
         }
 
@@ -895,26 +895,25 @@ impl TaskManager {
 
     // 停止任务
     async fn stop_task(&self, task_id: &str, app_handle: &AppHandle) -> Result<(), String> {
+        // 尝试从运行中的任务中移除并终止进程
         if let Some(mut child) = self.running_tasks.remove(task_id, app_handle).await? {
             if let Err(e) = child.kill().await {
                 return Err(format!("Failed to kill task '{}': {}", task_id, e));
             }
-
-            // 创建任务更新 - 仅更新状态
-            let mut update = TaskConfig::new();
-            update.id = task_id.to_string();
-            update.status = Some(TaskStatus::Idle);
-
-            // 使用部分更新
-            self.task_config
-                .lock()
-                .await
-                .update_single_task(task_id.to_string(), update)?;
-        
-            Ok(())
-        } else {
-            Err(format!("Task '{}' is not running", task_id))
         }
+        
+        // 无论任务是否在运行，都更新状态为Idle
+        let mut update = TaskConfig::new();
+        update.id = task_id.to_string();
+        update.status = Some(TaskStatus::Idle);
+
+        // 使用部分更新
+        self.task_config
+            .lock()
+            .await
+            .update_single_task(task_id.to_string(), update)?;
+        
+        Ok(())
     }
 
     // 创建任务
@@ -1112,7 +1111,7 @@ impl TaskManager {
             }
 
             // 删除物理代码文件夹（如果请求）
-            if delete_file {
+            if !delete_file {
                 let task_dir = self.get_task_dir(Some(task_id))?;
                 if let Err(e) = fs::remove_dir_all(task_dir) {
                     return Err(format!("Failed to delete task directory: {}", e));

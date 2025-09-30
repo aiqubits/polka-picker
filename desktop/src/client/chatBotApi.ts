@@ -30,6 +30,12 @@ export interface ChatMessage {
   message_type: string;
 }
 
+export interface SaveParametersRequest {
+  ai_api_url?: string;
+  ai_api_key?: string;
+  ai_model?: string;
+}
+
 /**
  * 初始化聊天机器人
  * @returns Promise<void>
@@ -37,7 +43,6 @@ export interface ChatMessage {
 export async function initChatbot(): Promise<void> {
   try {
     await invoke('init_chatbot');
-    console.log('Chatbot initialized successfully');
   } catch (error) {
     console.error('Chatbot initialization failed:', error);
     throw new Error(`Chatbot initialization failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -51,7 +56,6 @@ export async function initChatbot(): Promise<void> {
 export async function createChatSession(): Promise<string> {
   try {
     const sessionId = await invoke<string>('create_chat_session');
-    console.log('Session created successfully. Session ID:', sessionId);
     return sessionId;
   } catch (error) {
     console.error('Session creation failed:', error);
@@ -73,7 +77,6 @@ export async function sendChatMessage(sessionId: string, message: string): Promi
     };
     
     const response = await invoke<ChatResponse>('send_chat_message', { request });
-    console.log('Message sent successfully. Response:', response);
     return response;
   } catch (error) {
     console.error('Message sending failed:', error);
@@ -89,7 +92,6 @@ export async function getAvailableTools(): Promise<McpTool[]> {
   try {
     const toolsJson = await invoke<string>('get_available_tools');
     const tools = JSON.parse(toolsJson) as McpTool[];
-    console.log('Available tools retrieved successfully. Tool count:', tools.length);
     return tools;
   } catch (error) {
     console.error('Failed to retrieve available tools:', error);
@@ -105,7 +107,6 @@ export async function getAvailableTools(): Promise<McpTool[]> {
 export async function deleteChatSession(sessionId: string): Promise<void> {
   try {
     await invoke('delete_chat_session', { sessionId });
-    console.log('Session deleted successfully. Session ID:', sessionId);
   } catch (error) {
     console.error('Session deletion failed:', error);
     throw new Error(`Session deletion failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -120,7 +121,6 @@ export async function listChatSessions(): Promise<string[]> {
   try {
     const sessionsJson = await invoke<string>('list_chat_sessions');
     const sessions = JSON.parse(sessionsJson) as string[];
-    console.log('Chat sessions retrieved successfully. Session count:', sessions.length);
     return sessions;
   } catch (error) {
     console.error('Failed to retrieve chat sessions:', error);
@@ -137,7 +137,6 @@ export async function getChatSession(sessionId: string): Promise<SessionInfo> {
   try {
     const sessionJson = await invoke<string>('get_chat_session', { sessionId });
     const session = JSON.parse(sessionJson) as SessionInfo;
-    console.log('Chat session details retrieved successfully. Session ID:', sessionId);
     return session;
   } catch (error) {
     console.error('Failed to retrieve chat session details:', error);
@@ -154,10 +153,24 @@ export async function getChatHistory(sessionId: string): Promise<ChatMessage[]> 
   try {
     const historyJson = await invoke<string>('get_chat_history', { sessionId });
     const history = JSON.parse(historyJson) as ChatMessage[];
-    console.log('Chat history retrieved successfully. Message count:', history.length);
     return history;
   } catch (error) {
     console.error('Failed to retrieve chat history:', error);
     throw new Error(`Failed to retrieve chat history: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * 保存ai 配置到文件
+ * @param request 保存参数请求
+ * @returns Promise<void>
+ */
+export async function saveParametersToFile(request: SaveParametersRequest): Promise<void> {
+  try {
+    console.log('Saving parameters api:', request);
+    await invoke('save_parameters_to_file', { request });
+  } catch (error) {
+    console.error('Failed to save parameters:', error);
+    throw new Error(`Failed to save parameters: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

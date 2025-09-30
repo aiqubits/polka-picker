@@ -11,6 +11,9 @@ pub struct AppConfig {
     pub api_base_url: String,
     pub request_timeout_ms: u64,
     pub max_retries: u32,
+    pub ai_api_url: String,
+    pub ai_api_key: String,
+    pub ai_model: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -47,6 +50,9 @@ impl AppConfig {
             .set_default("api_base_url", "http://127.0.0.1:3000")?
             .set_default("request_timeout_ms", 30000)?
             .set_default("max_retries", 3)?
+            .set_default("ai_api_url", "https://api.openai.com/v1/chat/completions")?
+            .set_default("ai_api_key", "sk-00000000000000000000000000000000")?
+            .set_default("ai_model", "gpt-3.5-turbo")?
             // 添加配置文件（如果存在）
             .add_source(ConfigFile::from(config_file).required(false))
             // 添加环境变量
@@ -60,6 +66,9 @@ impl AppConfig {
             api_base_url: config.get_string("api_base_url").unwrap_or_else(|_| "http://127.0.0.1:3000".to_string()),
             request_timeout_ms: config.get_int("request_timeout_ms").ok().map(|v| v as u64).unwrap_or(30000),
             max_retries: config.get_int("max_retries").ok().map(|v| v as u32).unwrap_or(3),
+            ai_api_url: config.get_string("ai_api_url").unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".to_string()),
+            ai_api_key: config.get_string("ai_api_key").unwrap_or_else(|_| "sk-00000000000000000000000000000000".to_string()),
+            ai_model: config.get_string("ai_model").unwrap_or_else(|_| "gpt-3.5-turbo".to_string()),
         })
     }
     
@@ -69,8 +78,39 @@ impl AppConfig {
             api_base_url: "http://127.0.0.1:3000".to_string(),
             request_timeout_ms: 30000,
             max_retries: 3,
+            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+            ai_model: "gpt-3.5-turbo".to_string(),
         }
     }
+
+    pub fn save(&self) -> Result<(), AppConfigError> {
+        let config_dir = dirs::config_dir()
+            .ok_or_else(|| AppConfigError::ConfigDirNotFound)?
+            .join("picker-desktop");
+        
+        // 确保配置目录存在
+        std::fs::create_dir_all(&config_dir)?;
+        
+        let config_file = config_dir.join("config.toml");
+        
+        // 创建TOML格式的内容
+        let content = format!(
+            "api_base_url = \"{}\"\nrequest_timeout_ms = {}\nmax_retries = {}\nai_api_url = \"{}\"\nai_api_key = \"{}\"\nai_model = \"{}\"\n",
+            self.api_base_url,
+            self.request_timeout_ms,
+            self.max_retries,
+            self.ai_api_url,
+            self.ai_api_key,
+            self.ai_model
+        );
+        
+        // 写入文件
+        std::fs::write(&config_file, content)?;
+        
+        Ok(())
+    }
+    
 }
 
 #[cfg(test)]
@@ -129,6 +169,9 @@ max_retries = 4
             api_base_url: config.get_string("api_base_url").unwrap(),
             request_timeout_ms: config.get_int("request_timeout_ms").unwrap() as u64,
             max_retries: config.get_int("max_retries").unwrap() as u32,
+            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_key: "sk-00000000000000000000000000000000".to_string(),
+            ai_model: "gpt-3.5-turbo".to_string(),
         };
         assert_eq!(app_config.api_base_url, "http://config-file.example.com");
         assert_eq!(app_config.request_timeout_ms, 10000);

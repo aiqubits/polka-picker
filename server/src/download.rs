@@ -46,7 +46,7 @@ pub async fn download(
     // 1. 验证token
     let token = query.token;
     let order_id = {
-        let mut tokens = state.download_tokens.lock().map_err(|_| AppError::InternalServerError)?;
+        let mut tokens = state.download_tokens.lock().map_err(|e| AppError::InternalServerError(format!("Download token lock error: {:?}", e)))?;
         let download_token = tokens.remove(&token).ok_or(AppError::Unauthorized("Invalid download token".to_string()))?;
         
         // 2. 检查token是否过期
@@ -62,7 +62,7 @@ pub async fn download(
         .bind(order_id)
         .fetch_optional(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError);
+        .map_err(|e| AppError::DatabaseError(format!("Order fetch error: {:?}", e)));
     
     let order: Order = match order_result {
         Ok(Some(order)) => order,
@@ -70,7 +70,7 @@ pub async fn download(
             return Err(AppError::NotFound("Order not found".to_string()));
         },
         Err(e) => {
-            return Err(e);
+            return Err(AppError::DatabaseError(format!("Order fetch error: {:?}", e)));
         },
     };
     info!("Download request for order ID: {}, picker ID: {}", order_id, order.picker_id);
@@ -84,7 +84,7 @@ pub async fn download(
         .bind(order.picker_id)
         .fetch_optional(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError);
+        .map_err(|e| AppError::DatabaseError(format!("Picker fetch error: {:?}", e)));
     
     let picker: Picker = match picker_result {
         Ok(Some(picker)) => picker,
@@ -92,7 +92,7 @@ pub async fn download(
             return Err(AppError::NotFound("Picker not found".to_string()));
         },
         Err(e) => {
-            return Err(e);
+            return Err(AppError::DatabaseError(format!("Picker fetch error: {:?}", e)));
         },
     };
     info!("Download request for order ID: {}, picker ID: {}, file path: {}", order_id, order.picker_id, picker.file_path);
@@ -104,7 +104,7 @@ pub async fn download(
     }
     
     // 7. 打开文件
-    let file = File::open(file_path).await.map_err(|_| AppError::InternalServerError)?;
+    let file = File::open(file_path).await.map_err(|e| AppError::InternalServerError(format!("File open error: {:?}", e)))?;
     let stream = ReaderStream::new(file);
     let body = AxumBody::from_stream(stream);
     info!("Download request update times");
@@ -113,7 +113,7 @@ pub async fn download(
         .bind(picker.picker_id)
         .execute(&state.db)
         .await
-        .map_err(|_| AppError::DatabaseError)?;
+        .map_err(|e| AppError::DatabaseError(format!("Download count update error: {:?}", e)))?;
     
     // 9. 设置响应头
     let mut headers = HeaderMap::new();
@@ -240,9 +240,9 @@ mod tests {
             info!("Download failed with error: {:?}", e);
             // 让我们看看具体的错误信息
             match e {
-                AppError::InternalServerError => info!("Internal server error occurred"),
+                AppError::InternalServerError(msg) => info!("Internal server error: {}", msg),
                 AppError::NotFound(msg) => info!("Not found: {}", msg),
-                AppError::Unauthorized(_) => info!("Unauthorized access"),
+                AppError::Unauthorized(msg) => info!("Unauthorized access: {}", msg),
                 _ => info!("Other error: {:?}", e),
             }
         }
@@ -280,7 +280,7 @@ mod tests {
             Ok(_) => panic!("Expected error, but got Ok"),
         };
         match err {
-            AppError::Unauthorized(_) => {},
+            AppError::Unauthorized(msg) => info!("Unauthorized error: {}", msg),
             _ => panic!("Expected Unauthorized error"),
         }
     }

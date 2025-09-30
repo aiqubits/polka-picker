@@ -13,35 +13,29 @@ use crate::{
 pub struct McpAgent {
     client: Arc<dyn McpClient>,
     tools: Vec<Box<dyn Tool + Send + Sync>>,
-    model: String,
     system_prompt: String,
-    temperature: f32,
-    max_tokens: Option<usize>,
+    openai_model: Option<OpenAIChatModel>,
 }
 
 impl McpAgent {
     /// 创建一个新的 McpAgent 实例
-    pub fn new(client: Arc<dyn McpClient>, model: String, system_prompt: String) -> Self {
+    pub fn new(client: Arc<dyn McpClient>, system_prompt: String) -> Self {
         Self {
             client,
             tools: Vec::new(),
-            model,
             system_prompt,
-            temperature: 0.6, // 默认值
-            max_tokens: None, // 默认不设置
+            openai_model: None, // 默认不设置OpenAI模型
         }
     }
     
-    /// 设置模型的温度参数
-    pub fn with_temperature(mut self, temperature: f32) -> Self {
-        self.temperature = temperature;
-        self
-    }
-    
-    /// 设置模型的最大令牌数
-    pub fn with_max_tokens(mut self, max_tokens: usize) -> Self {
-        self.max_tokens = Some(max_tokens);
-        self
+    /// 创建一个新的 McpAgent 实例，并指定 OpenAIChatModel
+    pub fn with_openai_model(client: Arc<dyn McpClient>, system_prompt: String, openai_model: OpenAIChatModel) -> Self {
+        Self {
+            client,
+            tools: Vec::new(),
+            system_prompt,
+            openai_model: Some(openai_model),
+        }
     }
 
     /// 向 Agent 添加一个工具
@@ -117,7 +111,6 @@ impl Agent for McpAgent {
         // 创建一个新的 McpAgent 实例，复制基本字段，但不复制工具（简化实现）
         let new_agent = McpAgent::new(
             self.client.clone(),
-            self.model.clone(),
             self.system_prompt.clone(),
         );
 
@@ -132,10 +125,8 @@ impl Clone for McpAgent {
         Self {
             client: Arc::clone(&self.client),
             tools: Vec::new(), // 不复制工具，因为 Box<dyn Tool> 不能直接克隆
-            model: self.model.clone(),
             system_prompt: self.system_prompt.clone(),
-            temperature: self.temperature,
-            max_tokens: self.max_tokens,
+            openai_model: self.openai_model.clone(), // 克隆OpenAI模型实例
         }
     }
 }
@@ -145,11 +136,8 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
         &self,
         input: std::collections::HashMap<String, String>,
     ) -> Pin<Box<dyn std::future::Future<Output = Result<AgentOutput, anyhow::Error>> + Send>> {
-        // 捕获所需的信息
-        let model_name = self.model.clone();
+        // 提前捕获系统提示词
         let system_prompt = self.system_prompt.clone();
-        let temperature = self.temperature;
-        let max_tokens = self.max_tokens;
         let input_text = input
             .get("input")
             .cloned()
@@ -177,29 +165,35 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
             system_prompt
         };
 
-        // 构建一个简单的OpenAI模型实例（实际应用中可能需要从配置或环境变量获取API密钥）
-        let api_key =
-            std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "OPENAI_API_KEY".to_string());
-        let base_url = std::env::var("OPENAI_API_URL").ok();
+        // 提前捕获OpenAI模型实例，避免在async move中使用self
+        let openai_model_clone = self.openai_model.clone();
 
         Box::pin(async move {
             // 检查输入是否为空
             if input_text.is_empty() {
                 let mut return_values = std::collections::HashMap::new();
                 return_values.insert("answer".to_string(), "Please enter valid content".to_string());
+                // 从OpenAI模型获取模型名称，如果没有则使用默认值
+                let model_name = if let Some(ref openai_model) = openai_model_clone {
+                    openai_model.model_name().map(|s| s.to_string()).unwrap_or("unknown".to_string())
+                } else {
+                    "unknown".to_string()
+                };
                 return_values.insert("model".to_string(), model_name);
                 return Ok(AgentOutput::Finish(AgentFinish { return_values }));
             }
 
-            // 创建OpenAI模型实例
-            let mut model = OpenAIChatModel::new(api_key.clone(), base_url)
-                .with_model(model_name.clone())
-                .with_temperature(temperature);
-            
-            // 如果设置了max_tokens，则应用该设置
-            if let Some(max_tokens) = max_tokens {
-                model = model.with_max_tokens(max_tokens.try_into().unwrap());
-            }
+            // 使用传入的OpenAI模型实例或创建新的实例
+            let model = if let Some(ref openai_model) = openai_model_clone {
+                // 使用传入的OpenAI模型实例
+                openai_model
+            } else {
+                // 如果没有提供OpenAI模型实例，则返回错误
+                let mut return_values = std::collections::HashMap::new();
+                return_values.insert("answer".to_string(), "No OpenAI model provided".to_string());
+                return_values.insert("model".to_string(), "unknown".to_string());
+                return Ok(AgentOutput::Finish(AgentFinish { return_values }));
+            };
 
             // 构建消息列表
             let mut messages = Vec::new();
@@ -228,6 +222,9 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
                         ChatMessage::AIMessage(content) => content.content,
                         _ => { format!("{},{:?}", "Non-AI message received", completion.message) }
                     };
+
+                    // 从OpenAI模型获取模型名称，如果没有则使用默认值
+                    let model_name = model.model_name().map(|s| s.to_string()).unwrap_or("unknown".to_string());
 
                     // 解析模型输出，判断是否需要调用工具
                     // 这里应该正确解析模型输出的JSON格式
@@ -267,6 +264,12 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
                 }
                 Err(e) => {
                     // 出错时返回错误信息
+                    // 从OpenAI模型获取模型名称，如果没有则使用默认值
+                    let model_name = if let Some(ref model) = openai_model_clone {
+                        model.model_name().map(|s| s.to_string()).unwrap_or("unknown".to_string())
+                    } else {
+                        "unknown".to_string()
+                    };
                     let mut return_values = std::collections::HashMap::new();
                     return_values.insert("answer".to_string(), format!("Model invocation failed: {}", e));
                     return_values.insert("model".to_string(), model_name);
