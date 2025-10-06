@@ -7,6 +7,7 @@ import LogStream from './components/LogStream'
 import MainContent from './components/MainContent'
 import { clientAPI } from './client/api'
 import type { UserSystemInfoResponse, UserInfo }  from './types'
+import { openUrl } from '@tauri-apps/plugin-opener'
 
 function App() {
   const [activePage, setActivePage] = useState<'home' | 'chatbot' | 'marketplace' | 'profile'>('home')
@@ -235,14 +236,22 @@ function App() {
         <div className="post-section">
           <div className="section-header">
             <span className="section-icon">📝</span>
-            <span className="section-title">Post</span>
+            <span className="section-title">User Guide</span>
           </div>
-          <div className="post-item">
+          <div 
+            className="post-item"
+            onClick={async () => {
+              // 这里应该打开具体的链接，暂时使用一个示例链接
+              // 在实际应用中，您可能需要根据帖子ID或其他标识符来确定要打开的链接
+              await openUrl('https://www.openpick.org/zh-cn/docs/guide/configure_picker_environment/')
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <div className="post-meta">
-              <span className="post-id">240301</span>
+              <span className="post-id">2510106</span>
               <span className="post-action">Update</span>
             </div>
-            <div className="post-title">New Features Release</div>
+            <div className="post-title">How to configure the Picker task runtime environment</div>
             <div className="post-subtitle">Read more</div>
           </div>
         </div>
@@ -250,14 +259,17 @@ function App() {
         <div className="support-section">
           <div className="section-header">
             <span className="section-icon">🛠️</span>
-            <span className="section-title">Support</span>
+            <span className="section-title">Official Account</span>
           </div>
           <div className="qr-code">
-            <div className="qr-placeholder">QR</div>
+            <img src="/openpick_qrcode.jpg" alt="QR Code" className="qr-image" />
           </div>
           <div className="support-contact">
             <span className="contact-icon">📧</span>
-            <span className="contact-text">Contact Support</span>
+            <span className="contact-text">Developer Wechat</span>
+          </div>
+            <div className="qr-code">
+            <img src="/dev_wechat.jpg" alt="QR Code" className="qr-image" />
           </div>
         </div>
 

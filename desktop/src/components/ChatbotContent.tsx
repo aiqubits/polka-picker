@@ -492,9 +492,9 @@ const ChatbotContent = () => {
       await handleShowTools();
     } else {
       // 对于其他按钮，调用sendChatMessage接口
-      if (buttonText === 'get_weather') {
+      if (buttonText === 'get weather mock') {
         await sendMessageToApi(activeSession, "What's the weather like in New York");
-      } else if (buttonText === 'simple_calculate') {
+      } else if (buttonText === 'simple calculate mock') {
         await sendMessageToApi(activeSession, "What is 9.11 plus 9.8?");
       } else {
         await sendMessageToApi(activeSession, buttonText);

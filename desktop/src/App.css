@@ -551,6 +551,13 @@ input::placeholder {
   font-size: 12px;
 }
 
+.qr-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
 .support-contact {
   display: flex;
   align-items: center;

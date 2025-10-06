@@ -1,8 +1,8 @@
 [environment]
 from = "cfx:usdt"
 to = "avax:usdt"
-fromAddress = "0x5C01dc5D3047dB6Ae4E9A9B0946e2092a1a3A788"
-recipient = "0x5C01dc5D3047dB6Ae4E9A9B0946e2092a1a3A788"
+fromAddress = "0x83498FCa79e0bc0548B4FC0744f467208c54132B"
+recipient = "0x83498FCa79e0bc0548B4FC0744f467208c54132B"
 amount = 0.7
 privateKey = ""
 

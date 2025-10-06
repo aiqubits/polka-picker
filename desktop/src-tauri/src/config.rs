@@ -37,7 +37,7 @@ impl AppConfig {
         
         let config_dir = dirs::config_dir()
             .ok_or_else(|| AppConfigError::ConfigDirNotFound)?
-            .join("picker-desktop");
+            .join(".picker-desktop");
         
         // 确保配置目录存在
         std::fs::create_dir_all(&config_dir)?;
@@ -87,7 +87,7 @@ impl AppConfig {
     pub fn save(&self) -> Result<(), AppConfigError> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| AppConfigError::ConfigDirNotFound)?
-            .join("picker-desktop");
+            .join(".picker-desktop");
         
         // 确保配置目录存在
         std::fs::create_dir_all(&config_dir)?;

@@ -2,7 +2,7 @@ import './ProfileContent.css'
 import type { Activity, InstalledTool, UserInfo, SystemInfo } from '../types'
 import { useState, useEffect, useRef } from 'react';
 import { clientAPI } from '../client/api'
-import { 
+import {
   isPickerOperator, queryPickerByWallet, registerPicker,
   removePicker, grantOperatorRole, revokeOperatorRole
 } from '../client/pickerPaymentContract'
@@ -23,8 +23,6 @@ interface UserProfile {
   premium_balance: number,
   name: string;
   role: string;
-  ai_api_url: string;
-  ai_api_key: string;
   bio: string;
   location: string;
   email: string;
@@ -41,7 +39,7 @@ interface ProfileContentProps {
 const ProfileContent = ({ activeTab }: ProfileContentProps) => {
   // 使用useRef保存最新的userData值
   const userDataRef = useRef<UserProfile>(null);
-  
+
   // 模拟用户数据
   const [userData, setUserData] = useState<UserProfile>({
     chain_name: '',
@@ -56,15 +54,13 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
     premium_balance: 0,
     name: 'Deporter',
     role: 'User',
-    ai_api_url: 'https://api.openai.com/v1/chat/completions',
-    ai_api_key: 'sk-XXXXXXXXXXXXXXXXXXXXXXX',
-    bio: 'Full-stack developer with expertise in cloud architecture and DevOps',
+    bio: 'Full-stack developer with expertise in AI Agent, Web3, Cloud architecture and Web Development',
     location: 'China, ShangHai',
     email: 'OpenPickLabs@hotmail.com',
-    member_since: '2025.01',
+    member_since: '2025.10',
     position: 'Senior Developer',
-    wallet_address: '0x5C01dc5D3047dB6Ae4E9A9B0946e2092a1a3A788',
-    skills: ['JavaScript', 'React', 'Node.js', 'Cloud Architecture', 'DevOps']
+    wallet_address: '0x83498FCa79e0bc0548B4FC0744f467208c54132B',
+    skills: ['Rust', 'C/Cpp', 'Go', 'Python', 'Java', 'JavaScript', 'React', 'Node.js', 'AI', 'Web3', 'Cloud Architecture', 'DevOps']
   });
 
   // 对话框状态
@@ -172,7 +168,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node) &&
-          accountButtonRef.current && !accountButtonRef.current.contains(event.target as Node)) {
+        accountButtonRef.current && !accountButtonRef.current.contains(event.target as Node)) {
         setShowAccountMenu(false);
       }
     };
@@ -191,7 +187,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
       console.log('fetchUserData chain_url:', chain_url);
       console.log('fetchUserData address:', address);
       const wallet_balance = await clientAPI.getWalletBalance(address, chain_url);
-      
+
       if (responseUserInfo) {
         // 更新用户数据，将后端数据覆盖到模拟数据上
         setUserData(prev => ({
@@ -229,7 +225,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
       const chain_url = userDataRef.current?.chain_url || '';
       let wallet_balance = await clientAPI.getWalletBalance(address, chain_url);
       if (wallet_balance) {
-        wallet_balance = wallet_balance +1;
+        wallet_balance = wallet_balance + 1;
         setUserData(prev => ({
           ...prev,
           wallet_balance: wallet_balance,
@@ -266,17 +262,17 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
   // 钱包余额轮询 - 仅在用户登录时启动
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
-    
+
     if (isLoggedIn) {
       // 立即获取一次余额
       // fetchWalletBalance();
-      
+
       // 设置定时轮询，每10秒获取一次用户数据
       intervalId = setInterval(() => {
         fetchWalletBalance();
       }, 10000); // 10秒轮询一次
     }
-    
+
     // 清理函数，在组件卸载时清除定时器
     return () => {
       if (intervalId) {
@@ -466,18 +462,18 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
       showCustomAlert('Error', errorMessage, 'OK', () => { });
     }
   };
-  
+
   // 获取最大可转账余额
   const handleGetMaxTransferableBalance = async () => {
     try {
       const address = userDataRef.current?.wallet_address || '';
       const chain_url = userDataRef.current?.chain_url || '';
-      
+
       if (!address || !chain_url) {
         showCustomAlert('Error', 'Wallet address or chain URL is missing', 'OK', () => { });
         return;
       }
-      
+
       const maxBalance = await clientAPI.getMaxTransferableBalance(address, chain_url);
       // 将gwei转换为eth单位
       const maxBalanceInEth = maxBalance / 1e9;
@@ -514,58 +510,58 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
   // 智能合约权限管理函数
   const handleIsPickerOperator = async () => {
     if (!operatorAddress) {
-      showCustomAlert('Error', 'Please enter an operator address', 'OK', () => {});
+      showCustomAlert('Error', 'Please enter an operator address', 'OK', () => { });
       return;
     }
-    
+
     try {
       console.log('Frontend UI: Calling isPickerOperator with address:', operatorAddress);
       const response = await isPickerOperator(operatorAddress);
       console.log('Frontend UI: Received response from isPickerOperator:', response);
       showCustomAlert(
-        'Is Picker Operator', 
-        `Address ${operatorAddress} is ${response.is_operator ? '' : 'not '}an operator`, 
-        'OK', 
-        () => {}
+        'Is Picker Operator',
+        `Address ${operatorAddress} is ${response.is_operator ? '' : 'not '}an operator`,
+        'OK',
+        () => { }
       );
     } catch (error) {
       console.error('Failed to check if address is operator:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to check if address is operator';
-      showCustomAlert('Error', errorMessage, 'OK', () => {});
+      showCustomAlert('Error', errorMessage, 'OK', () => { });
     }
   };
 
   const handleQueryPickerByWallet = async () => {
     if (!walletAddress) {
-      showCustomAlert('Error', 'Please enter a wallet address', 'OK', () => {});
+      showCustomAlert('Error', 'Please enter a wallet address', 'OK', () => { });
       return;
     }
-    
+
     try {
       const response = await queryPickerByWallet(walletAddress);
-      const message = response.picker_id 
-        ? `Picker ID: ${response.picker_id}, Dev User ID: ${response.dev_user_id}` 
+      const message = response.picker_id
+        ? `Picker ID: ${response.picker_id}, Dev User ID: ${response.dev_user_id}`
         : 'No picker found for this wallet address';
-      showCustomAlert('Query Picker By Wallet', message, 'OK', () => {});
+      showCustomAlert('Query Picker By Wallet', message, 'OK', () => { });
     } catch (error) {
       console.error('Failed to query picker by wallet:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to query picker by wallet';
-      showCustomAlert('Error', errorMessage, 'OK', () => {});
+      showCustomAlert('Error', errorMessage, 'OK', () => { });
     }
   };
 
   const handleRegisterPicker = async () => {
     if (!registerPickerId || !devUserId || !devWalletAddress) {
-      showCustomAlert('Error', 'Please fill in all required fields', 'OK', () => {});
+      showCustomAlert('Error', 'Please fill in all required fields', 'OK', () => { });
       return;
     }
-    
+
     try {
       const response = await registerPicker(registerPickerId, devUserId, devWalletAddress);
       if (response.success) {
         const explorer_url = userDataRef.current?.explorer_url || '';
         const tx_hash_url = `${explorer_url}/tx/${response.tx_hash}`;
-        
+
         const formattedMessage = (
           <div style={{ textAlign: 'left', wordBreak: 'break-all' }}>
             <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)' }}>Transaction Hash URL:</p>
@@ -602,33 +598,33 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
         );
 
         showCustomAlert(
-          'Register Picker Success', 
-          formattedMessage, 
-          'OK', 
-          () => {}
+          'Register Picker Success',
+          formattedMessage,
+          'OK',
+          () => { }
         );
       } else {
-        showCustomAlert('Register Picker Failed', 'Failed to register picker', 'OK', () => {});
+        showCustomAlert('Register Picker Failed', 'Failed to register picker', 'OK', () => { });
       }
     } catch (error) {
       console.error('Failed to register picker:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to register picker';
-      showCustomAlert('Error', errorMessage, 'OK', () => {});
+      showCustomAlert('Error', errorMessage, 'OK', () => { });
     }
   };
 
   const handleRemovePicker = async () => {
     if (!removePickerId) {
-      showCustomAlert('Error', 'Please enter a picker ID', 'OK', () => {});
+      showCustomAlert('Error', 'Please enter a picker ID', 'OK', () => { });
       return;
     }
-    
+
     try {
       const response = await removePicker(removePickerId);
       if (response.success) {
         const explorer_url = userDataRef.current?.explorer_url || '';
         const tx_hash_url = `${explorer_url}/tx/${response.tx_hash}`;
-        
+
         const formattedMessage = (
           <div style={{ textAlign: 'left', wordBreak: 'break-all' }}>
             <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)' }}>Transaction Hash URL:</p>
@@ -665,33 +661,33 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
         );
 
         showCustomAlert(
-          'Remove Picker Success', 
-          formattedMessage, 
-          'OK', 
-          () => {}
+          'Remove Picker Success',
+          formattedMessage,
+          'OK',
+          () => { }
         );
       } else {
-        showCustomAlert('Remove Picker Failed', 'Failed to remove picker', 'OK', () => {});
+        showCustomAlert('Remove Picker Failed', 'Failed to remove picker', 'OK', () => { });
       }
     } catch (error) {
       console.error('Failed to remove picker:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to remove picker';
-      showCustomAlert('Error', errorMessage, 'OK', () => {});
+      showCustomAlert('Error', errorMessage, 'OK', () => { });
     }
   };
 
   const handleGrantOperatorRole = async () => {
     if (!grantOperatorAddress) {
-      showCustomAlert('Error', 'Please enter an operator address', 'OK', () => {});
+      showCustomAlert('Error', 'Please enter an operator address', 'OK', () => { });
       return;
     }
-    
+
     try {
       const response = await grantOperatorRole(grantOperatorAddress);
       if (response.success) {
         const explorer_url = userDataRef.current?.explorer_url || '';
         const tx_hash_url = `${explorer_url}/tx/${response.tx_hash}`;
-        
+
         const formattedMessage = (
           <div style={{ textAlign: 'left', wordBreak: 'break-all' }}>
             <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)' }}>Transaction Hash URL:</p>
@@ -728,33 +724,33 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
         );
 
         showCustomAlert(
-          'Grant Operator Role Success', 
-          formattedMessage, 
-          'OK', 
-          () => {}
+          'Grant Operator Role Success',
+          formattedMessage,
+          'OK',
+          () => { }
         );
       } else {
-        showCustomAlert('Grant Operator Role Failed', 'Failed to grant operator role', 'OK', () => {});
+        showCustomAlert('Grant Operator Role Failed', 'Failed to grant operator role', 'OK', () => { });
       }
     } catch (error) {
       console.error('Failed to grant operator role:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to grant operator role';
-      showCustomAlert('Error', errorMessage, 'OK', () => {});
+      showCustomAlert('Error', errorMessage, 'OK', () => { });
     }
   };
 
   const handleRevokeOperatorRole = async () => {
     if (!revokeOperatorAddress) {
-      showCustomAlert('Error', 'Please enter an operator address', 'OK', () => {});
+      showCustomAlert('Error', 'Please enter an operator address', 'OK', () => { });
       return;
     }
-    
+
     try {
       const response = await revokeOperatorRole(revokeOperatorAddress);
       if (response.success) {
         const explorer_url = userDataRef.current?.explorer_url || '';
         const tx_hash_url = `${explorer_url}/tx/${response.tx_hash}`;
-        
+
         const formattedMessage = (
           <div style={{ textAlign: 'left', wordBreak: 'break-all' }}>
             <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)' }}>Transaction Hash URL:</p>
@@ -791,18 +787,18 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
         );
 
         showCustomAlert(
-          'Revoke Operator Role Success', 
-          formattedMessage, 
-          'OK', 
-          () => {}
+          'Revoke Operator Role Success',
+          formattedMessage,
+          'OK',
+          () => { }
         );
       } else {
-        showCustomAlert('Revoke Operator Role Failed', 'Failed to revoke operator role', 'OK', () => {});
+        showCustomAlert('Revoke Operator Role Failed', 'Failed to revoke operator role', 'OK', () => { });
       }
     } catch (error) {
       console.error('Failed to revoke operator role:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to revoke operator role';
-      showCustomAlert('Error', errorMessage, 'OK', () => {});
+      showCustomAlert('Error', errorMessage, 'OK', () => { });
     }
   };
 
@@ -879,8 +875,8 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
           <div className="section-header">
             <h3 className="section-title">Account Management</h3>
             <div style={{ position: 'relative' }}>
-              <button 
-                className="section-menu" 
+              <button
+                className="section-menu"
                 ref={accountButtonRef}
                 onClick={() => setShowAccountMenu(!showAccountMenu)}
                 title="More options"
@@ -888,7 +884,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                 ⋮
               </button>
               {showAccountMenu && (
-                <div 
+                <div
                   ref={accountMenuRef}
                   style={{
                     position: 'absolute',
@@ -931,7 +927,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                             // 先关闭当前对话框，再显示错误消息
                             closeDialog();
                             setTimeout(() => {
-                              showCustomAlert('Invalid Private Key', 'Please enter a valid private key with 64 hexadecimal characters.', 'OK', () => {});
+                              showCustomAlert('Invalid Private Key', 'Please enter a valid private key with 64 hexadecimal characters.', 'OK', () => { });
                             }, 100);
                             return;
                           }
@@ -943,19 +939,19 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                                 newPrivateKey: newPrivateKey
                               });
                               // 显示成功消息
-                              showCustomAlert('Success', response.message, 'OK', () => {});
+                              showCustomAlert('Success', response.message, 'OK', () => { });
                               // 刷新用户数据
                               fetchUserData();
                             } catch (error) {
                               // 显示错误消息
-                              showCustomAlert('Error', `Failed to replace private key: ${error instanceof Error ? error.message : 'Unknown error'}`, 'OK', () => {});
+                              showCustomAlert('Error', `Failed to replace private key: ${error instanceof Error ? error.message : 'Unknown error'}`, 'OK', () => { });
                             }
                           }
                         },
                         false,
                         0,
                         'Cancel',
-                        () => {}
+                        () => { }
                       );
                       // 添加输入框到对话框
                       setTimeout(() => {
@@ -1015,7 +1011,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                     <span className="btn-text">Check Operator</span>
                   </button>
                 </div>
-                
+
                 {/* queryPickerByWallet */}
                 <div className="contract-action-group">
                   <input
@@ -1029,7 +1025,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                     <span className="btn-text">Query Picker</span>
                   </button>
                 </div>
-                
+
                 {/* registerPicker */}
                 <div className="contract-action-group">
                   <input
@@ -1057,7 +1053,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                     <span className="btn-text">Register Picker</span>
                   </button>
                 </div>
-                
+
                 {/* removePicker */}
                 <div className="contract-action-group">
                   <input
@@ -1071,7 +1067,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                     <span className="btn-text">Remove Picker</span>
                   </button>
                 </div>
-                
+
                 {/* grantOperatorRole */}
                 <div className="contract-action-group">
                   <input
@@ -1085,7 +1081,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                     <span className="btn-text">Grant Operator</span>
                   </button>
                 </div>
-                
+
                 {/* revokeOperatorRole */}
                 <div className="contract-action-group">
                   <input
@@ -1156,20 +1152,7 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
               <button className="close-btn" onClick={handleCancelEdit}>×</button>
             </div>
             <div className="modal-body">
-              <div className="form-group">
-                <label>AI-API-URL</label>
-                <input
-                  type="text"
-                  value={editData.ai_api_url}
-                  onChange={(e) => handleInputChange('ai_api_url', e.target.value)}
-                />
-                <label>AI-API-Key</label>
-                <input
-                  type="text"
-                  value={editData.ai_api_key}
-                  onChange={(e) => handleInputChange('ai_api_key', e.target.value)}
-                />
-              </div>
+
               <div className="form-group">
                 <label>Bio</label>
                 <textarea
@@ -1302,14 +1285,14 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
                 <button
                   className="custom-dialog-button"
                   onClick={handleGetMaxTransferableBalance}
-                  style={{ 
+                  style={{
                     marginTop: '10px',
-                    backgroundColor: 'var(--accent-primary)', 
-                    color: 'white', 
-                    padding: '8px 16px', 
-                    borderRadius: '6px', 
-                    border: 'none', 
-                    cursor: 'pointer', 
+                    backgroundColor: 'var(--accent-primary)',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
                     transition: 'background-color 0.2s',
                     width: '100%'
                   }}

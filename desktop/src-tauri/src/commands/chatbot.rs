@@ -211,14 +211,14 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
     // 添加自定义工具
     mcp_client.add_tools(vec![
         McpTool {
-            name: "get_weather".to_string(),
+            name: "get weather mock".to_string(),
             description: format!(
                 "Get weather information for a specified city. For example: 'What's the weather like in Beijing?'.
                 The parameter request body you should extract is: '\"parameters\": {{ \"city\": \"{}\" }}'",
                 "city".to_string()),
         },
         McpTool {
-            name: "simple_calculate".to_string(),
+            name: "simple calculate mock".to_string(),
             description: format!(
                 "Execute simple mathematical calculations. For example: 'What is 9.11 plus 9.8?'.
                 The parameter request body you should extract is: '\"parameters\": {{ \"expression\": \"{}\" }}'",
@@ -266,7 +266,7 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
     }
     
     // 注册自定义工具处理器
-    mcp_client.register_tool_handler("get_weather".to_string(), |params: HashMap<String, Value>| async move {
+    mcp_client.register_tool_handler("get weather mock".to_string(), |params: HashMap<String, Value>| async move {
         let default_city = Value::String("Shanghai".to_string());
         let city_value = params.get("city").unwrap_or(&default_city);
         let city = city_value.as_str().unwrap_or("Shanghai");
@@ -279,7 +279,7 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
         }))
     });
     
-    mcp_client.register_tool_handler("simple_calculate".to_string(), |params: HashMap<String, Value>| async move {
+    mcp_client.register_tool_handler("simple calculate mock".to_string(), |params: HashMap<String, Value>| async move {
         let expression_value = params.get("expression").ok_or_else(|| Error::msg("Missing calculation expression"))?;
         let expression = expression_value.as_str().ok_or_else(|| Error::msg("Invalid expression format"))?;
         
