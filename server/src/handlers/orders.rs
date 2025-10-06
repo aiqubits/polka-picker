@@ -456,7 +456,7 @@ pub async fn create_order(
                 .bind(user_id)
                 .execute(&mut *tx)
                 .await;
-        println!("picker.price {:?}", picker.price);
+            
         match &result {
             Ok(_) => info!("User balance updated successfully"),
             Err(e) => info!("Failed to update user balance: {:?}", e),

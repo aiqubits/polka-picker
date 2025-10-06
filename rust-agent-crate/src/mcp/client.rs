@@ -97,10 +97,10 @@ impl McpClient for SimpleMcpClient {
         let tool_name = tool_name.to_string();
         let params = params.clone();
         let handler_opt = self.tool_handlers.get(&tool_name).cloned();
-        for (tool_name, _handler) in &self.tool_handlers {
-            // 我们只能打印键（工具名称），因为值是一个闭包类型
-            println!("- Tool: {}", tool_name);
-        }
+        // for (tool_name, _handler) in &self.tool_handlers {
+        //     // 我们只能打印键（工具名称），因为值是一个闭包类型
+        //     println!("- Tool: {}", tool_name);
+        // }
         Box::pin(async move {
             // 检查是否有自定义的工具处理器
             if let Some(handler) = handler_opt {

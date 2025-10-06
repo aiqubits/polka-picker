@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use crate::database::DbPool;
 use crate::models::{VerificationCode, DownloadToken, UserType};
+use log::{info, error};
 
 // 配置文件结构
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -57,11 +58,11 @@ impl Config {
 
         // 检查配置文件是否存在
         let config_path = "config.toml";
+
         if std::path::Path::new(config_path).exists() {
-            println!("Config file found: {}", config_path);
             builder = builder.add_source(config::File::with_name(config_path));
         } else {
-            eprintln!("Warning: config.toml file not found at {}", config_path);
+            error!("Warning: config.toml file not found at {}", config_path);
         }
 
         // 添加环境变量源
@@ -71,10 +72,10 @@ impl Config {
         let config = builder.build()?.try_deserialize();
         match &config {
             Ok(cfg) => {
-                println!("Successfully loaded config: {:?}", cfg);
+                info!("Successfully loaded config: {:?}", cfg);
             }
             Err(e) => {
-                eprintln!("Failed to load config: {}", e);
+                error!("Failed to load config: {}", e);
             }
         }
         config
@@ -122,7 +123,8 @@ impl AppState {
     pub fn new(db: DbPool) -> Self {
         // 尝试从配置文件读取配置，如果失败则使用默认值
         let config = Config::from_file().unwrap_or_else(|_| {
-            eprintln!("Warning: Failed to load config file, using default values");
+            info!("Warning: Failed to load config file, using default values");
+            
             Config {
                 jwt: JwtConfig {
                     secret: "your-secret-key".to_string(),

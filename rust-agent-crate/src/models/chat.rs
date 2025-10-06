@@ -18,7 +18,7 @@ pub trait ChatModel: Send + Sync {
 
     // 模型基础URL
     fn base_url(&self) -> String {
-        "https://api.openai.com/v1/chat/completions".to_string()
+        "https://api.openai.com/v1".to_string()
     }
     
     // 核心方法：处理聊天消息

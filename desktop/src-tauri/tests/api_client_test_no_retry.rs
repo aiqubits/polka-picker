@@ -53,7 +53,7 @@ fn test_api_client_post() {
             api_base_url: server.url(),
             request_timeout_ms: 30000,
             max_retries: 0, // 禁用重试以避免tokio运行时问题
-            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_url: "https://api.openai.com/v1".to_string(),
             ai_api_key: "sk-00000000000000000000000000000000".to_string(),
             ai_model: "gpt-3.5-turbo".to_string(),
         };
@@ -101,7 +101,7 @@ fn test_download_successful() {
             api_base_url: server.url(),
             request_timeout_ms: 30000,
             max_retries: 0, // 禁用重试以避免tokio运行时问题
-            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_url: "https://api.openai.com/v1".to_string(),
             ai_api_key: "sk-00000000000000000000000000000000".to_string(),
             ai_model: "gpt-3.5-turbo".to_string(),
         };
@@ -143,7 +143,7 @@ fn test_download_server_error() {
             api_base_url: server.url(),
             request_timeout_ms: 30000,
             max_retries: 0, // 禁用重试以避免tokio运行时问题
-            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_url: "https://api.openai.com/v1".to_string(),
             ai_api_key: "sk-00000000000000000000000000000000".to_string(),
             ai_model: "gpt-3.5-turbo".to_string(),
         };
@@ -176,7 +176,7 @@ async fn test_download_network_error() {
         api_base_url: "http://localhost:12345".to_string(), // 不存在的端口
         request_timeout_ms: 1000, // 短超时
         max_retries: 0, // 禁用重试
-        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_url: "https://api.openai.com/v1".to_string(),
         ai_api_key: "sk-00000000000000000000000000000000".to_string(),
         ai_model: "gpt-3.5-turbo".to_string(),
     };
@@ -203,7 +203,7 @@ async fn test_is_retriable_error_network() {
         api_base_url: "http://localhost:12345".to_string(), // 不存在的端口
         request_timeout_ms: 1000,
         max_retries: 1,
-        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_url: "https://api.openai.com/v1".to_string(),
         ai_api_key: "sk-00000000000000000000000000000000".to_string(),
         ai_model: "gpt-3.5-turbo".to_string(),
     };
@@ -241,7 +241,7 @@ fn test_is_retriable_error_status_codes() {
             api_base_url: server.url(),
             request_timeout_ms: 30000,
             max_retries: 1,
-            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_url: "https://api.openai.com/v1".to_string(),
             ai_api_key: "sk-00000000000000000000000000000000".to_string(),
             ai_model: "gpt-3.5-turbo".to_string(),
         };
@@ -271,7 +271,7 @@ async fn test_upload_file_successful() {
         api_base_url: "http://localhost:3000".to_string(),
         request_timeout_ms: 30000,
         max_retries: 0,
-        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_url: "https://api.openai.com/v1".to_string(),
         ai_api_key: "sk-00000000000000000000000000000000".to_string(),
         ai_model: "gpt-3.5-turbo".to_string(),
     };
@@ -288,7 +288,7 @@ async fn test_upload_file_without_image() {
         api_base_url: "http://localhost:3000".to_string(),
         request_timeout_ms: 30000,
         max_retries: 0,
-        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_url: "https://api.openai.com/v1".to_string(),
         ai_api_key: "sk-00000000000000000000000000000000".to_string(),
         ai_model: "gpt-3.5-turbo".to_string(),
     };
@@ -305,7 +305,7 @@ async fn test_upload_file_server_error() {
         api_base_url: "http://localhost:3000".to_string(),
         request_timeout_ms: 30000,
         max_retries: 0,
-        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_url: "https://api.openai.com/v1".to_string(),
         ai_api_key: "sk-00000000000000000000000000000000".to_string(),
         ai_model: "gpt-3.5-turbo".to_string(),
     };

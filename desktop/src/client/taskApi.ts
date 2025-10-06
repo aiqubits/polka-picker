@@ -61,8 +61,6 @@ class TaskAPIService {
   private isListening: boolean = false;
   private isStatusListening: boolean = false;
   private lastTasksCache: TaskConfig[] = [];
-  private pollingInterval: number | null = null;
-  private isPolling: boolean = false;
 
   // 初始化日志监听
   private async initializeLogListener(): Promise<void> {
@@ -109,70 +107,16 @@ class TaskAPIService {
     if (this.isStatusListening) return;
     
     this.isStatusListening = true;
-    
+
     try {
       // 尝试监听后端事件
       await listen('task_status_changed', async (event) => {
         console.log('TaskAPI: Received task_status_changed event:', event.payload);
         console.log('TaskAPI: Current listeners count:', this.statusListeners.size);
-        await this.refreshAndNotify();
+        await this.listTasks();
       });
-      console.log('Event listener initialized successfully');
     } catch (error) {
       console.error('Failed to initialize event listener:', error);
-    }
-    
-    // 启动轮询作为备用机制
-    this.startPolling();
-  }
-
-  // 刷新任务并通知监听器
-  private async refreshAndNotify(): Promise<void> {
-    try {
-      const tasks = await this.listTasks();
-      const hasChanges = JSON.stringify(tasks) !== JSON.stringify(this.lastTasksCache);
-            
-      if (hasChanges) {
-        this.lastTasksCache = tasks;
-        this.statusListeners.forEach(listener => {
-          try {
-            listener(tasks);
-          } catch (error) {
-            console.error('Error in status listener:', error);
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Failed to refresh tasks:', error);
-    }
-  }
-
-  // 启动轮询
-  private startPolling(): void {
-    if (this.isPolling) return;
-    
-    this.isPolling = true;
-    
-    this.pollingInterval = window.setInterval(async () => {
-      // 只有当有运行中的任务时才频繁轮询
-      const hasRunningTasks = this.lastTasksCache.some(task => 
-        task.status?.toLowerCase() === 'running'
-      );
-      
-      console.log('TaskAPI: Polling check - hasRunningTasks:', hasRunningTasks, 'cached tasks:', this.lastTasksCache.length);
-      
-      if (hasRunningTasks || this.lastTasksCache.length === 0) {
-        await this.refreshAndNotify();
-      }
-    }, 3000); // 3秒轮询一次
-  }
-
-  // 停止轮询
-  private stopPolling(): void {
-    if (this.pollingInterval) {
-      window.clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-      this.isPolling = false;
     }
   }
 
@@ -190,19 +134,27 @@ class TaskAPIService {
   // 移除状态监听器
   removeStatusListener(listener: (tasks: TaskConfig[]) => void): void {
     this.statusListeners.delete(listener);
-    
-    // 如果没有监听器了，停止轮询
-    if (this.statusListeners.size === 0) {
-      this.stopPolling();
-    }
   }
 
   // 任务管理相关接口
   async listTasks(): Promise<TaskConfig[]> {
-    await delay(100)
     try {
       // 调用 Tauri 后端的 list_tasks 命令
       const tasks = await invoke<TaskConfig[]>('list_tasks');
+
+      const hasChanges = JSON.stringify(tasks) !== JSON.stringify(this.lastTasksCache);
+            
+      if (hasChanges) {
+        this.lastTasksCache = tasks;
+        
+        this.statusListeners.forEach(listener => {
+          try {
+            listener(tasks);
+          } catch (error) {
+            console.error('Error in status listener:', error);
+          }
+        });
+      }
 
       return tasks;
     } catch (error) {
@@ -222,7 +174,7 @@ class TaskAPIService {
       });
       
       // 立即刷新状态，不依赖事件
-      setTimeout(() => this.refreshAndNotify(), 500);
+      setTimeout(() => this.listTasks(), 500);
       
       return task;
     } catch (error) {
@@ -242,7 +194,7 @@ class TaskAPIService {
       });
       
       // 立即刷新状态，不依赖事件
-      setTimeout(() => this.refreshAndNotify(), 500);
+      setTimeout(() => this.listTasks(), 500);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? 
@@ -260,7 +212,7 @@ class TaskAPIService {
       });
       
       // 立即刷新状态，不依赖事件
-      setTimeout(() => this.refreshAndNotify(), 500);
+      setTimeout(() => this.listTasks(), 500);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? 
@@ -279,7 +231,7 @@ class TaskAPIService {
       });
 
       // 立即刷新状态，不依赖事件
-      setTimeout(() => this.refreshAndNotify(), 500);
+      setTimeout(() => this.listTasks(), 500);
     } catch (error) {
       const errorMessage = error instanceof Error ? 
         (error.message || 'Failed to delete task.') : 
@@ -366,7 +318,6 @@ class TaskAPIService {
 
   // 清理资源
   cleanup(): void {
-    this.stopPolling();
     this.statusListeners.clear();
     this.logListeners.clear();
   }

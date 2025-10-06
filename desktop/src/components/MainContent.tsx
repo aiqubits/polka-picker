@@ -3,6 +3,7 @@ import './MainContent.css'
 import TaskCard from './TaskCard'
 import { taskAPI, type TaskConfig } from '../client/taskApi'
 import { open } from '@tauri-apps/plugin-dialog'
+// import { deleteAllChatSessions } from '../client/chatBotApi'
 
 interface MainContentProps {
   activeTab?: string;
@@ -122,7 +123,7 @@ const MainContent: React.FC<MainContentProps> = ({ activeTab }) => {
       }
     };
 
-    // 只有当前界面是Home界面时才执行初始化，并且只执行一次
+    // 每次进入Home界面时都执行初始化
     if (activeTab === 'home') {
       initializeComponent();
     }
@@ -138,6 +139,26 @@ const MainContent: React.FC<MainContentProps> = ({ activeTab }) => {
     };
   }, [activeTab]); // 依赖activeTab而不是fetchTasks
 
+
+  // 任务状态轮询 - 仅在当前界面是Home时启动
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (activeTab === 'home') {
+      // 设置定时轮询，每10秒获取一次任务状态
+      intervalId = setInterval(() => {
+        fetchTasks();
+      }, 3000); // 3秒轮询一次
+    }
+
+    // 清理函数，在组件卸载或activeTab改变时清除定时器
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [activeTab, fetchTasks]);
+
   // 任务操作处理函数（增强版）
   const handleRunTask = async (taskId: string) => {
     if (operatingTaskId) return; // 防止重复操作
@@ -145,8 +166,12 @@ const MainContent: React.FC<MainContentProps> = ({ activeTab }) => {
     setOperatingTaskId(taskId);
     try {
       await taskAPI.runTask(taskId);
-      // 操作状态会在收到状态更新时自动清除，不需要手动设置超时清除
-      // 这样可以确保界面状态与后端实际状态保持一致
+      // 调用轮询机制
+      try {
+        await taskAPI.addStatusListener(statusListenerRef.current!);
+      } catch (error) {
+        console.error('Failed to initialize component:', error);
+      }
     } catch (error) {
       console.error('Failed to run task:', error);
       showCustomAlert('Error', 'Failed to run task. ' + (error instanceof Error ? error.message : 'Please try again.'), 'OK', () => {});
@@ -159,8 +184,26 @@ const MainContent: React.FC<MainContentProps> = ({ activeTab }) => {
     setOperatingTaskId(taskId);
     try {
       await taskAPI.deleteTask(taskId);
+
       // 删除成功后刷新任务列表
       await fetchTasks(true);
+
+      // // mcp 工具列表变更，删除所有的聊天会话
+      // await deleteAllChatSessions();
+
+      // // 先创建一个新会话，再清空 Chatbot 前端会话列表
+      // try {
+      //   console.log('Clearing chatbot frontend session data...');
+      //   // 清空Chatbot相关的localStorage项
+      //   localStorage.removeItem('chatbot_active_session');
+      //   localStorage.removeItem('chatbot_sessions');
+      //   localStorage.removeItem('chatbot_session_messages');
+      //   console.log('Chatbot frontend session data cleared');
+      // } catch (error) {
+      //   console.error('Failed to clear chatbot frontend session data:', error);
+      // }
+
+      // // 从Chatbot前端创建一个新会话，放在会话列表中
     } catch (error) {
       console.error('Failed to delete task:', error);
       showCustomAlert('Error', 'Failed to delete task. ' + (error instanceof Error ? error.message : 'Please try again.'), 'OK', () => {});
@@ -251,9 +294,9 @@ const MainContent: React.FC<MainContentProps> = ({ activeTab }) => {
       setIsProcessing(true);
       setUploadProgress(10);
       
-      // 创建任务
+      // 创建任务并获取返回的任务信息
       await taskAPI.createTask(taskName, selectedFilePath);
-      
+ 
       setUploadProgress(100);
       setTimeout(() => {
         setShowCreateTaskModal(false);
@@ -270,6 +313,24 @@ const MainContent: React.FC<MainContentProps> = ({ activeTab }) => {
         // 确保处理完成
         setIsProcessing(false);
       }, 500);
+
+      // 删除成功后刷新任务列表
+      const taskList = await taskAPI.listTasks();
+      setTasks(taskList);
+
+      // // 清空 Chatbot 前端会话列表
+      // try {
+      //   console.log('Clearing chatbot session data...');
+      //   // 清空Chatbot相关的localStorage项
+      //   localStorage.removeItem('chatbot_active_session');
+      //   localStorage.removeItem('chatbot_sessions');
+      //   localStorage.removeItem('chatbot_session_messages');
+        
+      //   // mcp 工具列表变更，删除所有的聊天会话
+      //   await deleteAllChatSessions();
+      // } catch (error) {
+      //   console.error('Failed to clear chatbot session data:', error);
+      // }            
     } catch (error) {
       console.error('Error creating task:', error);
       showCustomAlert('Error', 'Failed to create task. ' + (error instanceof Error ? error.message : 'Please try again.'), 'OK', () => {

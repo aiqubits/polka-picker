@@ -79,7 +79,7 @@ pub async fn get_wallet_balance(address: Address, chain_url: String) -> Result<i
     let parsed_url = chain_url
         .parse()
         .map_err(|e| format!("Invalid RPC URL: {}", e))?;
-    println!("parsed_url: {:?}", parsed_url);
+
     // 初始化provider
     let provider = ProviderBuilder::new().connect_http(parsed_url);
 

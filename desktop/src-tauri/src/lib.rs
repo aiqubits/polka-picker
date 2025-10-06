@@ -120,8 +120,10 @@ pub fn run() {
       commands::chatbot::list_chat_sessions,
       commands::chatbot::get_chat_session,
       commands::chatbot::delete_chat_session,
+      commands::chatbot::delete_all_chat_sessions,
       commands::chatbot::get_available_tools,
       commands::chatbot::save_parameters_to_file,
+      commands::chatbot::refresh_available_tools,
     ))
     // 运行应用
     .run(tauri::generate_context!())

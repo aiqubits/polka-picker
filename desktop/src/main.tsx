@@ -5,8 +5,8 @@ import './index.css'
 import App from './App'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
-// 清理Token的函数
-const cleanupTokenOnClose = async () => {
+// 清理Token和会话的函数
+const cleanupOnClose = async () => {
   try {
     // 动态导入clientAPI，避免循环依赖
     const { clientAPI } = await import('./client/api')
@@ -19,8 +19,31 @@ const cleanupTokenOnClose = async () => {
       await clientAPI.logout()
       console.log('Token cleanup completed')
     }
+
+    // 清空 Chatbot 前端会话列表
+    try {
+      console.log('Clearing chatbot frontend session data...');
+      // 清空Chatbot相关的localStorage项
+      localStorage.removeItem('chatbot_active_session');
+      localStorage.removeItem('chatbot_sessions');
+      localStorage.removeItem('chatbot_session_messages');
+      console.log('Chatbot frontend session data cleared');
+    } catch (error) {
+      console.error('Failed to clear chatbot frontend session data:', error);
+    }
+    
+    // 删除所有 chatbot 聊天会话
+    try {
+      const { deleteAllChatSessions } = await import('./client/chatBotApi')
+      console.log('Deleting all chat sessions on window close...')
+      await deleteAllChatSessions()
+      console.log('All chat sessions deleted')
+    } catch (error) {
+      console.error('Failed to delete chat sessions on close:', error)
+    }
+
   } catch (error) {
-    console.error('Failed to cleanup token on close:', error)
+    console.error('Failed to cleanup on close:', error);
   }
 }
 
@@ -54,7 +77,7 @@ if (mainWindow && mainWindow.onCloseRequested) {
 
     try {
       // 执行清理Token的操作
-      await cleanupTokenOnClose()
+      await cleanupOnClose()
     } catch (error) {
       console.error('Error during cleanup:', error)
     } finally {

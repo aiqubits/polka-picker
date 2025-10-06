@@ -1,14 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import type { ChatMessage, ChatbotSession } from '../types';
 import * as chatbotApi from '../client/chatBotApi';
 import './ChatbotContent.css';
-
-// 定义默认API设置
-const DEFAULT_API_SETTINGS = {
-  url: 'https://api.openai.com/v1/chat/completions',
-  key: 'sk-00000000000000000000000000000000',
-  model: 'gpt-3.5-turbo'
-};
 
 // localStorage键名常量
 const STORAGE_KEYS = {
@@ -17,8 +10,12 @@ const STORAGE_KEYS = {
   MESSAGES: 'chatbot_session_messages'
 };
 
+interface ChatbotContentProps {
+  activeTab?: string;
+}
+
 // 修改状态定义，为每个会话单独存储消息历史
-const ChatbotContent = () => {
+const ChatbotContent: React.FC<ChatbotContentProps> = ({ activeTab }) => {
   const [activeSession, setActiveSession] = useState<string>('')
   const [sessions, setSessions] = useState<ChatbotSession[]>([])
   // 修改为对象，为每个会话单独存储消息
@@ -36,6 +33,19 @@ const ChatbotContent = () => {
     key: '',
     model: ''
   });
+
+  // 保存状态到localStorage
+  const saveStateToStorage = (): void => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, activeSession);
+      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
+      localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(sessionMessages));
+      // 保存API设置
+      localStorage.setItem('chatbot_api_settings', JSON.stringify(apiSettings));
+    } catch (error) {
+      console.error('Failed to save state to localStorage:', error);
+    }
+  };
 
   // 从localStorage加载状态
   const loadStateFromStorage = (): void => {
@@ -61,30 +71,13 @@ const ChatbotContent = () => {
         setSessionMessages(JSON.parse(savedMessages));
       }
       
-      // 加载API设置或使用默认值
+      // 加载API设置
       const savedApiSettings = localStorage.getItem('chatbot_api_settings');
       if (savedApiSettings) {
         setApiSettings(JSON.parse(savedApiSettings));
-      } else {
-        setApiSettings(DEFAULT_API_SETTINGS);
       }
     } catch (error) {
       console.error('Failed to load state from localStorage:', error);
-      // 如果加载失败，使用默认API设置
-      setApiSettings(DEFAULT_API_SETTINGS);
-    }
-  };
-
-  // 保存状态到localStorage
-  const saveStateToStorage = (): void => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, activeSession);
-      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
-      localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(sessionMessages));
-      // 保存API设置
-      localStorage.setItem('chatbot_api_settings', JSON.stringify(apiSettings));
-    } catch (error) {
-      console.error('Failed to save state to localStorage:', error);
     }
   };
 
@@ -230,8 +223,20 @@ const ChatbotContent = () => {
         setApiSettings(JSON.parse(savedApiSettings));
       } catch (error) {
         console.error('Failed to parse saved API settings:', error);
-        // 如果解析失败，使用当前状态的值
+        // 如果解析失败，重置为初始状态
+        setApiSettings({
+          url: '',
+          key: '',
+          model: ''
+        });
       }
+    } else {
+      // 如果没有保存的设置，重置为初始状态
+      setApiSettings({
+        url: '',
+        key: '',
+        model: ''
+      });
     }
     setDialogVisible(true);
   };
@@ -311,7 +316,7 @@ const ChatbotContent = () => {
           lowerMessage.includes('工具') ||
           lowerMessage.includes('show me available tools')) {
         // 调用获取可用工具接口
-        const tools = await chatbotApi.getAvailableTools();
+        const tools = await chatbotApi.refreshAvailableTools();
         if (tools && tools.length > 0) {
           botResponse = 'Here are the available tools:';
           responseButtons = tools.map((tool, index) => ({
@@ -511,8 +516,8 @@ const ChatbotContent = () => {
     let responseButtons: { id: string; text: string; action: string }[] = [];
     
     try {
-      // 直接调用getAvailableTools接口
-      const tools = await chatbotApi.getAvailableTools();
+      // 刷新并获取最新的工具列表
+      const tools = await chatbotApi.refreshAvailableTools();
       if (tools && tools.length > 0) {
         botResponse = 'Here are the available tools:';
         responseButtons = tools.map((tool, index) => ({
@@ -569,12 +574,13 @@ const ChatbotContent = () => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [getCurrentMessages()]);
+  }, [sessionMessages, activeSession]);
 
   // 添加useEffect钩子来初始化聊天机器人
   useEffect(() => {
     const initChatbot = async () => {
       try {
+        console.log('Initializing chatbot useEffect...');
         // 先从localStorage加载状态
         loadStateFromStorage();
         
@@ -604,16 +610,19 @@ const ChatbotContent = () => {
       }
     };
     
-    initChatbot();
-  }, []);
+    // 只在组件首次挂载时执行初始化
+    if (activeTab === 'chatbot' && !isInitialized) {
+      initChatbot();
+    }
+}, [activeTab]);
 
   // 添加useEffect钩子来监听状态变化并保存到localStorage
   useEffect(() => {
     // 组件初始化完成后，只要有任何状态变化就保存
-    if (isInitialized) {
+    // if (isInitialized) {
       saveStateToStorage();
-    }
-  }, [activeSession, sessions, sessionMessages, isInitialized]);
+    // }
+  }, [activeSession, sessions, sessionMessages, isInitialized, apiSettings]);
 
   // 添加额外的useEffect来确保消息变化时立即保存
   useEffect(() => {
@@ -659,7 +668,7 @@ const ChatbotContent = () => {
                     className="form-input"
                     value={apiSettings.url}
                     onChange={(e) => setApiSettings({...apiSettings, url: e.target.value})}
-                    placeholder="Enter API URL"
+                    placeholder="https://api.openai.com/v1"
                   />
                 </div>
                 <div className="form-group">
@@ -669,7 +678,7 @@ const ChatbotContent = () => {
                     className="form-input"
                     value={apiSettings.key}
                     onChange={(e) => setApiSettings({...apiSettings, key: e.target.value})}
-                    placeholder="Enter API Key"
+                    placeholder="sk-00000000000000000000000000000000"
                   />
                 </div>
                 <div className="form-group">
@@ -679,7 +688,7 @@ const ChatbotContent = () => {
                     className="form-input"
                     value={apiSettings.model}
                     onChange={(e) => setApiSettings({...apiSettings, model: e.target.value})}
-                    placeholder="Enter Model Name"
+                    placeholder="gpt-3.5-turbo"
                   />
                 </div>
               </div>

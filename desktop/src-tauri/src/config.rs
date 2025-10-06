@@ -47,10 +47,10 @@ impl AppConfig {
         // 创建配置构建器
         let builder = Config::builder()
             // 添加默认值
-            .set_default("api_base_url", "http://127.0.0.1:3000")?
+            .set_default("api_base_url", "https://picker-api.openpick.org")?
             .set_default("request_timeout_ms", 30000)?
             .set_default("max_retries", 3)?
-            .set_default("ai_api_url", "https://api.openai.com/v1/chat/completions")?
+            .set_default("ai_api_url", "https://api.openai.com/v1")?
             .set_default("ai_api_key", "sk-00000000000000000000000000000000")?
             .set_default("ai_model", "gpt-3.5-turbo")?
             // 添加配置文件（如果存在）
@@ -63,10 +63,10 @@ impl AppConfig {
         
         // 解析配置到结构体
         Ok(AppConfig {
-            api_base_url: config.get_string("api_base_url").unwrap_or_else(|_| "http://127.0.0.1:3000".to_string()),
+            api_base_url: config.get_string("api_base_url").unwrap_or_else(|_| "https://picker-api.openpick.org".to_string()),
             request_timeout_ms: config.get_int("request_timeout_ms").ok().map(|v| v as u64).unwrap_or(30000),
             max_retries: config.get_int("max_retries").ok().map(|v| v as u32).unwrap_or(3),
-            ai_api_url: config.get_string("ai_api_url").unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".to_string()),
+            ai_api_url: config.get_string("ai_api_url").unwrap_or_else(|_| "https://api.openai.com/v1".to_string()),
             ai_api_key: config.get_string("ai_api_key").unwrap_or_else(|_| "sk-00000000000000000000000000000000".to_string()),
             ai_model: config.get_string("ai_model").unwrap_or_else(|_| "gpt-3.5-turbo".to_string()),
         })
@@ -75,10 +75,10 @@ impl AppConfig {
     // 获取默认配置
     pub fn default() -> Self {
         Self {
-            api_base_url: "http://127.0.0.1:3000".to_string(),
+            api_base_url: "https://picker-api.openpick.org".to_string(),
             request_timeout_ms: 30000,
             max_retries: 3,
-            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_url: "https://api.openai.com/v1".to_string(),
             ai_api_key: "sk-00000000000000000000000000000000".to_string(),
             ai_model: "gpt-3.5-turbo".to_string(),
         }
@@ -169,7 +169,7 @@ max_retries = 4
             api_base_url: config.get_string("api_base_url").unwrap(),
             request_timeout_ms: config.get_int("request_timeout_ms").unwrap() as u64,
             max_retries: config.get_int("max_retries").unwrap() as u32,
-            ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            ai_api_url: "https://api.openai.com/v1".to_string(),
             ai_api_key: "sk-00000000000000000000000000000000".to_string(),
             ai_model: "gpt-3.5-turbo".to_string(),
         };
@@ -183,7 +183,7 @@ max_retries = 4
     fn test_default_config() {
         let config = AppConfig::default();
         
-        assert_eq!(config.api_base_url, "http://127.0.0.1:3000");
+        assert_eq!(config.api_base_url, "https://picker-api.openpick.org");
         assert_eq!(config.request_timeout_ms, 30000);
         assert_eq!(config.max_retries, 3);
     }
@@ -196,7 +196,7 @@ max_retries = 4
         let config = AppConfig::load().unwrap();
         
         // 应该返回默认配置
-        assert_eq!(config.api_base_url, "http://127.0.0.1:3000");
+        assert_eq!(config.api_base_url, "https://picker-api.openpick.org");
         assert_eq!(config.request_timeout_ms, 30000);
         assert_eq!(config.max_retries, 3);
         

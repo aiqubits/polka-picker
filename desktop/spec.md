@@ -138,3 +138,22 @@ C:\Users\username\.pickers\nodejs\tintinland-run
 用户模块封装，调用后端邮箱账户注册，钱包账户生成，用生成云端用户数据，提供tauri command接口给 UI
 
 市场Picker 商品模块，订单模块调用封装
+
+## Linux 交叉编译打包
+
+```bash
+sudo apt install nsis
+sudo apt install lld llvm
+rustup target add x86_64-pc-windows-msvc
+cargo install --locked cargo-xwin
+
+cargo tauri build --no-bundle --config src-tauri/tauri.microsoftstore.conf.json --runner cargo-xwin --target x86_64-pc-windows-msvc
+cargo tauri bundle --config src-tauri/tauri.microsoftstore.conf.json --target x86_64-pc-windows-msvc
+```
+
+## Windows 编译打包
+
+```bash
+cargo tauri build --no-bundle --config src-tauri/tauri.microsoftstore.conf.json
+cargo tauri bundle --config src-tauri/tauri.microsoftstore.conf.json
+```

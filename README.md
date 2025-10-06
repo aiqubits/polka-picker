@@ -6,9 +6,9 @@ Picker is an innovative open-source project dedicated to building next-generatio
 
 ## Project Overview
 
-Picker is a multi-component system that integrates AI intelligent agents, decentralized application marketplace, and secure payment systems to provide users with powerful and user-friendly tools. 
+Picker is a multi-component system that integrates AI intelligent agents, decentralized application marketplace, and secure payment systems to provide users with powerful and user-friendly tools.
 
-This project aims to provide work, entertainment, and life management functions on local PCs for all Web3 users. It leverages AI technology to enhance system intelligence and user experience while addressing the single-point failure issue in traditional centralized systems.
+This project aims to provide work, entertainment, and life management functions on local PCs for all Web3 users. It leverages AI technology to enhance system intelligence and user experience while  providing a dual payment agent storage and download market that supports Web3 wallets and point transactions.
 
 ## For Conflux hackathon
 

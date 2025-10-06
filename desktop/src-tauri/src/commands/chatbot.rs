@@ -40,7 +40,7 @@ pub async fn send_chat_message(state: State<'_, Arc<Mutex<ChatbotState>>>, reque
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 message_type: "text".to_string(),
             };
-            info!("Add user message to history: {:?}", user_message);
+
             // 将会话消息添加到历史记录
             chatbot_state.message_histories
                 .entry(request.session_id.clone())
@@ -119,6 +119,19 @@ pub async fn delete_chat_session(state: State<'_, Arc<Mutex<ChatbotState>>>, ses
     } else {
         Err("Session does not exist".to_string())
     }
+}
+
+// 5. 删除所有的聊天会话
+#[command]
+pub async fn delete_all_chat_sessions(state: State<'_, Arc<Mutex<ChatbotState>>>) -> Result<(), String> {
+    let mut chatbot_state = state.lock().await;
+    
+    // 删除所有会话
+    chatbot_state.agents.clear();
+    // 清空所有消息历史
+    chatbot_state.message_histories.clear();
+    
+    Ok(())
 }
 
 // 定义消息结构体，用于序列化和反序列化
@@ -204,7 +217,6 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
     let app_handle_clone = app_handle.clone();
     let tasks = list_tasks(app_handle_clone).await.unwrap_or_default();
     for task in tasks.clone() {
-        info!("Add tool from local task: {:?}", task);
         mcp_client.add_tool(task.into());
     }
     
@@ -226,8 +238,7 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
         },
     ]);
 
-    let available_tools = mcp_client.available_tools.clone();
-    info!("Available tools: {:?}", available_tools);
+    // let available_tools = mcp_client.available_tools.clone();
 
     // 注册本地任务工具到MCP客户端
     for task in tasks {
@@ -308,13 +319,7 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
 
 // 创建新的Agent实例
 async fn create_agent(mcp_client: Arc<dyn McpClient>) -> Result<McpAgent, Error> {
-    // 从配置文件和环境变量中获取API密钥、基本URL和模型名称
-    // let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "OPENAI_API_KEY".to_string());
-    // let base_url = std::env::var("OPENAI_API_URL").ok();
-    // let model_name = std::env::var("OPENAI_API_MODEL").unwrap_or_else(|_| "".to_string());
-
     let config = AppConfig::load().unwrap_or_else(|_| AppConfig::default());
-    println!("config: {:?}", config);
     let api_key = config.ai_api_key;
     let base_url = if config.ai_api_url.is_empty() { 
         None 
@@ -323,10 +328,6 @@ async fn create_agent(mcp_client: Arc<dyn McpClient>) -> Result<McpAgent, Error>
     };
     // chatgpt-4o
     let model_name = config.ai_model;
-
-    println!("api_key rs : {:?}", api_key);
-    println!("base_url rs : {:?}", base_url);
-    println!("model_name rs : {:?}", model_name);
     
     // 创建OpenAI模型实例 - 支持OpenAI API
     let model = OpenAIChatModel::new(api_key.clone(), base_url)
@@ -396,7 +397,7 @@ pub struct LocalMcpTool {
     pub description: String,
 }
 
-// Tauri命令：获取可用工具列表
+// Tauri命令：获取可用工具列表，匹配当前的mcp工具列表
 #[command]
 pub async fn get_available_tools(state: State<'_, Arc<Mutex<ChatbotState>>>) -> Result<String, String> {
     let chatbot_state = state.lock().await;
@@ -466,7 +467,6 @@ pub struct SaveParametersRequest {
 // 实现 Tauri 命令：保存参数到文件
 #[command]
 pub async fn save_parameters_to_file(request: SaveParametersRequest) -> Result<(), String> {
-    println!("Saving parameters rs: {:?}", request);
     // 通过 config 加载当前配置
     let mut config = AppConfig::load().unwrap_or_else(|e| {
         error!("Failed to load config: {}", e);
@@ -483,9 +483,61 @@ pub async fn save_parameters_to_file(request: SaveParametersRequest) -> Result<(
     if let Some(ai_model) = request.ai_model {
         config.ai_model = ai_model;
     }
-    println!("Saving parameters rs: {:?}", config);
     // 保存更新后的配置
     config.save().map_err(|e| e.to_string())?;
     
     Ok(())
+}
+
+// Tauri命令：刷新可用工具列表，最新的mcp工具列表
+#[command]
+pub async fn refresh_available_tools(state: State<'_, Arc<Mutex<ChatbotState>>>, app_handle: AppHandle) -> Result<String, String> {
+    let mut chatbot_state = state.lock().await;
+    
+    // 注意：由于Arc<dyn McpClient>没有clear_tools和add_local_task_tool方法，
+    // 我们需要重新初始化MCP客户端来刷新工具列表
+    match init_mcp_client(app_handle).await {
+        Ok(new_mcp_client) => {
+            // 更新MCP客户端
+            chatbot_state.mcp_client = Some(new_mcp_client.clone());
+
+            // 确保MCP客户端已初始化
+            let mcp_client = chatbot_state.mcp_client.clone().ok_or_else(|| "MCP client is not initialized".to_string())?;
+            
+            // 获取工具列表
+            match mcp_client.get_tools().await {
+                Ok(tools) => {
+                    // 转换为本地可序列化的结构体
+                    let local_tools: Vec<LocalMcpTool> = tools.into_iter()
+                        .map(|tool| LocalMcpTool {
+                            name: tool.name,
+                            description: tool.description,
+                        })
+                        .collect();
+                    
+                    // 将工具列表转换为JSON字符串
+                    serde_json::to_string(&local_tools).map_err(|e| e.to_string())
+                },
+                Err(e) => Err(format!("Failed to get tools list: {}", e))
+            }
+            
+            // // 获取更新后的工具列表
+            // match new_mcp_client.get_tools().await {
+            //     Ok(tools) => {
+            //         // 转换为本地可序列化的结构体
+            //         let local_tools: Vec<LocalMcpTool> = tools.into_iter()
+            //             .map(|tool| LocalMcpTool {
+            //                 name: tool.name,
+            //                 description: tool.description,
+            //             })
+            //             .collect();
+                    
+            //         // 将工具列表转换为JSON字符串
+            //         serde_json::to_string(&local_tools).map_err(|e| e.to_string())
+            //     },
+            //     Err(e) => Err(format!("Failed to get tools list: {}", e))
+            // }
+        },
+        Err(e) => Err(format!("Failed to reinitialize MCP client: {}", e))
+    }
 }

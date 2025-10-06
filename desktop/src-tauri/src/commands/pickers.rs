@@ -98,7 +98,6 @@ pub async fn upload_picker(
 ) -> Result<String, String> {
     let config = AppConfig::load().unwrap_or_else(|_| AppConfig::default());
     let api_client = ApiClient::new(&config, Some(auth_manager.inner().clone()));
-    println!("upload_picker command");
     // 调用文件上传方法 
     let upload_response: UploadPickerResponse = api_client.upload_file(
         "/api/pickers",

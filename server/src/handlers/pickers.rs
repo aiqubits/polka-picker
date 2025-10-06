@@ -100,7 +100,7 @@ pub async fn upload_picker(
     Extension(user_id): Extension<Uuid>,
     mut multipart: Multipart,
 ) -> Result<Json<UploadPickerResponse>, AppError> {
-    println!("user_id: {}", user_id);
+
     // 验证用户是否为开发者
     let user = sqlx::query_as::<_, User>(
         "SELECT * FROM users WHERE user_id = ?",
@@ -124,7 +124,7 @@ pub async fn upload_picker(
     // 处理multipart数据
     while let Some(field) = multipart.next_field().await.map_err(|_| AppError::BadRequest("Invalid multipart data".to_string()))? {
         let name = field.name().unwrap_or("").to_string();
-        println!("name: {}", name);
+
         match name.as_str() {
             "alias" => {
                 alias = field.text().await.map_err(|_| AppError::BadRequest("Invalid alias".to_string()))?;
@@ -439,7 +439,6 @@ pub async fn delete_picker(
         // 尝试删除图片文件，忽略删除失败的情况（文件可能不存在）
         if tokio::fs::try_exists(&full_image_path).await.map_err(|e| AppError::InternalServerError(format!("Failed to check image file existence: {:?}", e)))? {
             // 打印删除图片文件的路径
-            println!("Deleting image file: {}", full_image_path);
             let _ = tokio::fs::remove_file(&full_image_path).await;
         }
     }
@@ -451,7 +450,6 @@ pub async fn delete_picker(
         // 尝试删除文件，忽略删除失败的情况（文件可能不存在）
         if tokio::fs::try_exists(&full_file_path).await.map_err(|e| AppError::InternalServerError(format!("Failed to check file existence: {:?}", e)))? {
             // 打印删除文件的路径
-            println!("Deleting file: {}", full_file_path);
             let _ = tokio::fs::remove_file(&full_file_path).await;
         }
     }

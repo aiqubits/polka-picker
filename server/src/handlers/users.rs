@@ -444,7 +444,6 @@ pub async fn replace_private_key(
     Extension(user_id): Extension<Uuid>,
     Json(payload): Json<ReplacePrivateKeyRequest>,
 ) -> Result<Json<ReplacePrivateKeyResponse>, AppError> {
-    println!("Replace Private Key Begin: {:?}", payload);
     // 检查用户是否存在
     let user = sqlx::query_as::<_, User>(
         "SELECT * FROM users WHERE user_id = ?",
@@ -575,12 +574,11 @@ pub async fn transfer_to(
             AppError::InternalServerError(format!("Invalid RPC URL: {:?}", e))
         })?,
     );
-    println!("provider: {:?}", provider);
+
     // 解析目标地址参数
     let to_address: Address = payload.to_address.parse()
         .map_err(|_| AppError::BadRequest("Invalid recipient address format".to_string()))?;
-    println!("to_address: {:?}", payload.to_address);
-    println!("amount: {:?}", payload.amount);
+    
     // 解析金额参数
     let amount: U256 = U256::from_str(&payload.amount)
         .map_err(|_| AppError::BadRequest("Invalid amount format".to_string()))?;
@@ -597,11 +595,11 @@ pub async fn transfer_to(
             tracing::error!("Failed to send transaction: {}", e);
             AppError::InternalServerError(format!("Failed to send transaction: {:?}", e))
         })?;
-        println!("pending_tx: {:?}", pending_tx);
+
     // 获取交易哈希字符串
     let tx_hash = format!("0x{}", hex::encode(pending_tx.tx_hash()));
     let tx_hash_url = format!("{}/tx/{}", state.blockchain_explorer_url, tx_hash);
-    println!("tx_hash_url: {:?}", tx_hash_url);
+
     Ok(axum::Json(TransferToResponse { 
         success: true,
         tx_hash_url,

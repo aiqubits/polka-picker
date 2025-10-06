@@ -38,8 +38,6 @@ pub async fn create_pool() -> Result<DbPool, sqlx::Error> {
     let mut database_url = url.to_string().replace("file:///", "sqlite:///");
     database_url.push_str("?mode=rwc");
 
-    println!("Database URL: {}", database_url);
-
     // 创建连接池
     let pool = SqlitePoolOptions::new()
         .max_connections(10) // 设置连接池大小
@@ -566,12 +564,6 @@ pub async fn insert_test_data(pool: &DbPool) -> Result<(), sqlx::Error> {
         
         assert_eq!(order_user_id_uuid, user_id_uuid, "Order should belong to test user");
         assert_eq!(order_picker_id_uuid, picker_id_uuid, "Order should reference test picker");
-
-        println!("✅ 测试数据验证成功!");
-        println!("📧 测试用户: {} ({})", user_name, email);
-        println!("💰 钱包地址: {}", wallet_address);
-        println!("📦 测试Picker: {} - {}", alias, description);
-        println!("🛒 测试订单: {} ({} 支付, {} 状态)", order_id_uuid, pay_type, order_status);
     }
 
     #[tokio::test]

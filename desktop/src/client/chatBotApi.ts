@@ -42,6 +42,7 @@ export interface SaveParametersRequest {
  */
 export async function initChatbot(): Promise<void> {
   try {
+    console.log('Invoking init_chatbot initChatbot...');
     await invoke('init_chatbot');
   } catch (error) {
     console.error('Chatbot initialization failed:', error);
@@ -113,6 +114,16 @@ export async function deleteChatSession(sessionId: string): Promise<void> {
   }
 }
 
+// 删除所有的聊天会话
+export async function deleteAllChatSessions(): Promise<void> {
+  try {
+    await invoke('delete_all_chat_sessions');
+  } catch (error) {
+    console.error('Failed to delete all chat sessions:', error);
+    throw new Error(`Failed to delete all chat sessions: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 /**
  * 列出所有的聊天会话
  * @returns Promise<string[]> 会话ID列表
@@ -167,10 +178,24 @@ export async function getChatHistory(sessionId: string): Promise<ChatMessage[]> 
  */
 export async function saveParametersToFile(request: SaveParametersRequest): Promise<void> {
   try {
-    console.log('Saving parameters api:', request);
     await invoke('save_parameters_to_file', { request });
   } catch (error) {
     console.error('Failed to save parameters:', error);
     throw new Error(`Failed to save parameters: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * 刷新可用工具列表
+ * @returns Promise<void>
+ */
+export async function refreshAvailableTools(): Promise<McpTool[]> {
+  try {
+    const toolsJson = await invoke<string>('refresh_available_tools');
+    const tools = JSON.parse(toolsJson) as McpTool[];
+    return tools;
+  } catch (error) {
+    console.error('Failed to refresh available tools:', error);
+    throw new Error(`Failed to refresh available tools: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

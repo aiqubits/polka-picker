@@ -739,34 +739,110 @@ impl TaskManager {
         if !file_path.exists() {
             return Err(format!("Entry file for task '{}' does not exist", task_id));
         }
+                // 定义一个在Windows平台上配置命令的函数，使用CREATE_NO_WINDOW标志避免显示控制台窗口
+        #[cfg(target_os = "windows")]
+        fn configure_windows_command(command: &mut Command) {
+            command.creation_flags(0x08000000); // CREATE_NO_WINDOW 标志，避免显示控制台窗口
+        }
+
         // 根据文件类型执行不同的命令
         let mut child = if cfg!(target_os = "windows") {
             if let Some(ext) = file_path.extension().and_then(OsStr::to_str) {
                 match ext.to_lowercase().as_str() {
-                    "exe" | "ps1" => Command::new(file_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .map_err(|e| e.to_string())?,
-                    "bat" | "cmd" => Command::new("cmd")
-                        .arg("/c")
-                        .arg(file_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .map_err(|e| e.to_string())?,
-                    "js" => Command::new("node")
-                        .arg(file_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .map_err(|e| e.to_string())?,
-                    "py" => Command::new("python")
-                        .arg(file_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .map_err(|e| e.to_string())?,
+                    "exe" | "ps1" => {
+                        #[cfg(target_os = "windows")]
+                        {
+                            let mut command = Command::new(file_path);
+                            configure_windows_command(&mut command);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            let mut command = Command::new(file_path);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                    },
+                    "bat" | "cmd" => {
+                        #[cfg(target_os = "windows")]
+                        {
+                            let mut command = Command::new("cmd");
+                            command.arg("/c").arg(file_path);
+                            configure_windows_command(&mut command);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            // let command = Command::new("cmd").arg("/c").arg(file_path);
+                            let mut command = {
+                                let mut cmd = Command::new("cmd");
+                                cmd.arg("/c").arg(file_path);
+                                cmd
+                            };
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                    },
+                    "js" => {
+                        #[cfg(target_os = "windows")]
+                        {
+                            let mut command = Command::new("node");
+                            command.arg(file_path);
+                            configure_windows_command(&mut command);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            let mut command = Command::new("node");
+                            command.arg(file_path);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                    },
+                    "py" => {
+                        #[cfg(target_os = "windows")]
+                        {
+                            let mut command = Command::new("python");
+                            command.arg(file_path);
+                            configure_windows_command(&mut command);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            let mut command = Command::new("python");
+                            command.arg(file_path);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                    },
                     _ => {
                         return Err(format!("Unsupported file type '{}' for task '{}'", ext, task_id));
                     }
@@ -778,28 +854,34 @@ impl TaskManager {
             // Unix-like systems
             if let Some(ext) = file_path.extension().and_then(OsStr::to_str) {
                 match ext.to_lowercase().as_str() {
-                    "js" => Command::new("node")
-                        .arg(file_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .map_err(|e| e.to_string())?,
-                    "py" => Command::new("python3")
-                        .arg(file_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .map_err(|e| e.to_string())?,
-                    "sh" => Command::new("bash")
-                        .arg(file_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .map_err(|e| e.to_string())?,
+                    "js" => {
+                        let mut command = Command::new("node");
+                        command.arg(file_path)
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+                            .map_err(|e| e.to_string())?
+                    },
+                    "py" => {
+                        let mut command = Command::new("python3");
+                        command.arg(file_path)
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+                            .map_err(|e| e.to_string())?
+                    },
+                    "sh" => {
+                        let mut command = Command::new("bash");
+                        command.arg(file_path)
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+                            .map_err(|e| e.to_string())?
+                    },
                     _ => {
                         // 尝试直接执行（需要可执行权限）
-                        Command::new(file_path)
-                            .stdout(Stdio::piped())
+                        let mut command = Command::new(file_path);
+                        command.stdout(Stdio::piped())
                             .stderr(Stdio::piped())
                             .spawn()
                             .map_err(|e| e.to_string())?
@@ -807,8 +889,8 @@ impl TaskManager {
                 }
             } else {
                 // 尝试直接执行（需要可执行权限）
-                Command::new(file_path)
-                    .stdout(Stdio::piped())
+                let mut command = Command::new(file_path);
+                command.stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .spawn()
                     .map_err(|e| e.to_string())?

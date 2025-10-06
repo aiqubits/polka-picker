@@ -23,7 +23,7 @@ async fn mock_api_test() {
         api_base_url: server.url(),
         request_timeout_ms: 30000,
         max_retries: 3,
-        ai_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+        ai_api_url: "https://api.openai.com/v1".to_string(),
         ai_api_key: "sk-00000000000000000000000000000000".to_string(),
         ai_model: "gpt-3.5-turbo".to_string(),
     };
@@ -39,6 +39,5 @@ async fn mock_api_test() {
     // 验证响应状态码
     assert_eq!(response.status(), 200);
 
-    println!("Created ApiClient successfully and sent request");
     mock.assert_async().await;
 }

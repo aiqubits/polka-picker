@@ -264,9 +264,6 @@ const ProfileContent = ({ activeTab }: ProfileContentProps) => {
     let intervalId: NodeJS.Timeout | null = null;
 
     if (isLoggedIn) {
-      // 立即获取一次余额
-      // fetchWalletBalance();
-
       // 设置定时轮询，每10秒获取一次用户数据
       intervalId = setInterval(() => {
         fetchWalletBalance();

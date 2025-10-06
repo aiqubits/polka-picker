@@ -124,7 +124,6 @@ function App() {
   const checkServerStatus = async () => {
     try {
       const status = await clientAPI.checkServerConnection();
-      console.log('Server connection status:', status);
       setServerConnected(status.is_connected);
     } catch (error) {
       console.error('Check server status error:', error);
@@ -280,7 +279,7 @@ function App() {
           {activePage === 'home' ? (
             <MainContent activeTab={activePage} />
           ) : activePage === 'chatbot' ? (
-            <ChatbotContent />
+              <ChatbotContent activeTab={activePage} />
           ) : activePage === 'marketplace' && serverConnected ? (
             <MarketplaceContent activeTab={activePage} />
           ) : activePage === 'profile' && serverConnected ? (

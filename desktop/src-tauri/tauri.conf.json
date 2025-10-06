@@ -1,9 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "picker-desktop",
-  "version": "0.1.0",
-  "identifier": "com.tauri.build",
-
+  "productName": "Picker",
+  "version": "0.0.1",
+  "identifier": "com.OpenPick.build",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -19,7 +18,8 @@
         "minWidth": 800,
         "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "devtools": false
       }
     ],
     "security": {
@@ -30,6 +30,7 @@
     "opener": {}
   },
   "bundle": {
+    "publisher": "OpenPick",	   
     "active": true,
     "targets": "all",
     "icon": [
