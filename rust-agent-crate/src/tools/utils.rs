@@ -30,6 +30,23 @@ pub fn find_matching_tool_index(tools: &[Box<dyn Tool + Send + Sync>], requested
         }
     }
     
+    // 4. 计算工具关键词匹配 - 只有当输入看起来像数学表达式时才匹配计算工具
+    // 检查是否包含计算相关的关键词和数学运算符
+    let has_calc_keywords = requested_lower.contains("calculate") || requested_lower.contains("计算") || 
+                           requested_lower.contains("plus") || requested_lower.contains("minus") || 
+                           requested_lower.contains("times") || requested_lower.contains("divided");
+    
+    let has_math_operators = requested_lower.contains("+") || requested_lower.contains("-") || 
+                            requested_lower.contains("*") || requested_lower.contains("/") || 
+                            requested_lower.contains("plus") || requested_lower.contains("minus") || 
+                            requested_lower.contains("times") || requested_lower.contains("divided");
+    
+    if has_calc_keywords && has_math_operators {
+        if let Some(tool) = tools.iter().find(|t| t.name().to_lowercase().contains("calculate") || t.name().to_lowercase().contains("计算")) {
+            return Some(tool.name().to_string());
+        }
+    }
+    
     None
 }
 

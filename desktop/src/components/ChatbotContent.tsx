@@ -662,7 +662,7 @@ const ChatbotContent: React.FC<ChatbotContentProps> = ({ activeTab }) => {
               {/* API设置表单 */}
               <div className="api-settings-form">
                 <div className="form-group">
-                  <label>URL</label>
+                  <label>AI API URL</label>
                   <input
                     type="text"
                     className="form-input"
@@ -672,7 +672,7 @@ const ChatbotContent: React.FC<ChatbotContentProps> = ({ activeTab }) => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Key</label>
+                  <label>AI API Key</label>
                   <input
                     type="password"
                     className="form-input"
@@ -682,7 +682,7 @@ const ChatbotContent: React.FC<ChatbotContentProps> = ({ activeTab }) => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Model</label>
+                  <label>AI Model</label>
                   <input
                     type="text"
                     className="form-input"

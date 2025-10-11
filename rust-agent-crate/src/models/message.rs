@@ -8,6 +8,7 @@ use serde_json::Value;
 pub struct ChatMessageContent {
     pub content: String,
     pub name: Option<String>,
+    // openai api tool_call_id 参数
     pub additional_kwargs: HashMap<String, Value>,
 }
 

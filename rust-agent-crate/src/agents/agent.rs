@@ -10,7 +10,7 @@ pub struct AgentAction {
     pub tool: String,
     pub tool_input: String,
     pub log: String,
-    pub thought: Option<String>, // 添加thought字段，与README保持一致
+    pub thought: Option<String>,
 }
 
 // Agent完成执行的结果（简化）

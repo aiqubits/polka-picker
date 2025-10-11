@@ -37,23 +37,22 @@ const config: HardhatUserConfig = {
       accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
     },
   },
-  chainDescriptors: {
-    71: {
-      name: "Conflux",
-      chainType: "l1",
-      blockExplorers: {
-        etherscan: {
-          name: "Conflux Explorer",
-          url: "https://evmtestnet.confluxscan.org",
-          apiUrl: "https://evmapi-testnet.confluxscan.org",
-        },
-      },
-    },
-  },
+  // chainDescriptors: {
+  //   11155111: {
+  //     name: "Sepolia",
+  //     chainType: "l1",
+  //     blockExplorers: {
+  //       etherscan: {
+  //         name: "Sepolia Explorer",
+  //         url: "https://sepolia.etherscan.io/",
+  //         apiUrl: "https://api-sepolia.etherscan.io/api",
+  //       },
+  //     },
+  //   },
+  // },
   verify:{
     etherscan: {
-      apiKey: "234234234324234234",
-      enabled: true,
+      apiKey: configVariable("ETHERSCAN_API_KEY"),
     }
   }
 };

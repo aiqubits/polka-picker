@@ -1,5 +1,5 @@
 use tauri::{command, State};
-use rust_agent::{OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, run_agent};
+use rust_agent::{OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, run_agent, SimpleMemory, BaseMemory};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
@@ -22,6 +22,8 @@ pub struct ChatbotState {
     mcp_client: Option<Arc<dyn McpClient>>,
     // 存储每个会话的消息历史
     message_histories: HashMap<String, Vec<ChatMessage>>,
+    // 存储每个会话的内存实例
+    memories: HashMap<String, Arc<Mutex<Box<dyn BaseMemory>>>>,
 }
 
 // 2. 在发送消息时，将消息添加到历史记录中
@@ -47,16 +49,52 @@ pub async fn send_chat_message(state: State<'_, Arc<Mutex<ChatbotState>>>, reque
                 .or_default()
                 .push(user_message);
             
+            // 如果有内存实例，打印内存内容
+            if let Some(memory) = agent.get_memory() {
+                match memory.load_memory_variables(&std::collections::HashMap::new()).await {
+                    Ok(memories) => {
+                        info!("Memory content before processing: {:?}", memories);
+                    },
+                    Err(e) => {
+                        error!("Failed to load memory variables: {}", e);
+                    }
+                }
+            }
+            
             // 运行Agent处理用户消息
             info!("Run agent request.message: {:?}", request.message.clone());
             match run_agent(agent.as_ref(), request.message.clone()).await {
                 Ok(response) => {
                     info!("Send message to agent: {}, and get response: {}", request.message.clone(), response);
                     
+                    // 如果有内存实例，打印内存内容
+                    if let Some(memory) = agent.get_memory() {
+                        match memory.load_memory_variables(&std::collections::HashMap::new()).await {
+                            Ok(memories) => {
+                                info!("Memory content after processing: {:?}", memories);
+                            },
+                            Err(e) => {
+                                error!("Failed to load memory variables: {}", e);
+                            }
+                        }
+                    }
+                    info!("response: {:?}", response);
+                    // 解析response，提取content字段
+                    let content = if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&response) {
+                        if let Some(content) = json_value.get("content").and_then(|v| v.as_str()) {
+                            content.to_string()
+                        } else {
+                            response.clone()
+                        }
+                    } else {
+                        response.clone()
+                    };
+                    info!("content: {:?}", content);
+                    
                     // 创建机器人回复消息并添加到历史记录
                     let bot_message = ChatMessage {
                         id: format!("msg_{}_{}", request.session_id, chrono::Utc::now().timestamp_millis()),
-                        content: response.clone(),
+                        content: content.clone(),
                         sender: "bot".to_string(),
                         timestamp: chrono::Utc::now().to_rfc3339(),
                         message_type: "text".to_string(),
@@ -70,12 +108,12 @@ pub async fn send_chat_message(state: State<'_, Arc<Mutex<ChatbotState>>>, reque
                     
                     Ok(ChatResponse {
                         success: true,
-                        message: Some(response),
+                        message: Some(content),
                         error: None
                     })
                 },
                 Err(e) => {
-                    info!("Failed to process message: {}", e);
+                    error!("Failed to process message: {}", e);
                     Ok(ChatResponse {
                         success: false,
                         message: None,
@@ -205,7 +243,7 @@ fn parse_and_calculate(expression: &str) -> Result<f64, Error> {
 // 初始化MCP客户端
 async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Error> {
     // 从环境变量获取配置
-    let mcp_url = std::env::var("MCP_URL").unwrap_or("http://localhost:8000/mcp".to_string());
+    let mcp_url = std::env::var("MCP_URL").unwrap_or("http://127.0.0.1:3000".to_string());
     
     // 初始化MCP客户端
     let mut mcp_client = SimpleMcpClient::new(mcp_url.clone());
@@ -261,13 +299,16 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
                 let task_id = task_id.as_str().ok_or_else(|| Error::msg("Invalid task_id format"))?;
                 
                 // 调用run_task执行任务
+                info!("Executing task: {}", task_id);
                 if let Err(err) = run_task(app_handle_for_task, task_id.to_string()).await {
-                    return Err(Error::msg(format!("Failed to run task: {}", err)));
+                    let error_msg = format!("Failed to execute task '{}': {}", task_id, err);
+                    error!("{}", error_msg);
+                    return Err(Error::msg(error_msg));
                 }
                 
                 Ok(json!({
                     "task_id": task_id,
-                    "status": task_status.map(|s| format!("{:?}", s)).unwrap_or("Unknown".to_string()),
+                    "status": task_status.map(|s| s.as_str().to_string()).unwrap_or("Unknown".to_string()),
                     "installed": task_installed,
                     "runs": task_runs,
                     "last_run": task_last_run,
@@ -281,35 +322,54 @@ async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Er
         let default_city = Value::String("Shanghai".to_string());
         let city_value = params.get("city").unwrap_or(&default_city);
         let city = city_value.as_str().unwrap_or("Shanghai");
-        Ok(json!({
+        info!("Getting weather for city: {}", city);
+        
+        let weather_json = json!({
             "city": city,
             "temperature": "25°C",
             "weather": "Sunny",
             "humidity": "40%",
             "updated_at": chrono::Utc::now().to_rfc3339()
-        }))
+        });
+        info!("Weather data retrieved for city: {}", city);
+        Ok(weather_json)
     });
     
     mcp_client.register_tool_handler("simple calculate mock".to_string(), |params: HashMap<String, Value>| async move {
         let expression_value = params.get("expression").ok_or_else(|| Error::msg("Missing calculation expression"))?;
         let expression = expression_value.as_str().ok_or_else(|| Error::msg("Invalid expression format"))?;
         
-        let result = parse_and_calculate(expression)?;
+        info!("Calculating expression: {}", expression);
+        let result = parse_and_calculate(expression).map_err(|e| {
+            let error_msg = format!("Failed to calculate expression '{}': {}", expression, e);
+            error!("{}", error_msg);
+            Error::msg(error_msg)
+        })?;
         
-        Ok(json!({
+        let result_json = json!({
             "expression": expression,
             "result": result,
             "calculated_at": chrono::Utc::now().to_rfc3339()
-        }))
+        });
+        info!("Calculation result: {}", result);
+        Ok(result_json)
     });
 
     // 打印 tool_handlers 工具处理器中的工具有哪些
     info!("Tool handlers: {:?}", mcp_client.tool_handlers.keys().collect::<Vec<_>>());
     
     // 连接到 MCP 服务器
+    info!("Connecting to MCP server: {}", mcp_url);
     if let Err(e) = mcp_client.connect(&mcp_url).await {
-        error!("Failed to connect to MCP server: {}", e);
+        let error_msg = format!("Failed to connect to MCP server at {}: {}", mcp_url, e);
+        error!("{}", error_msg);
+        // 即使连接失败，我们仍然返回客户端，因为它可以使用本地工具
+    } else {
+        info!("Successfully connected to MCP server: {}", mcp_url);
     }
+    
+    // 打印 tool_handlers 工具处理器中的工具有哪些
+    info!("Tool handlers: {:?}", mcp_client.tool_handlers.keys().collect::<Vec<_>>());
     
     // 把 mcp_client 转换为Arc<dyn McpClient>
     let client_arc: Arc<dyn McpClient> = Arc::new(mcp_client);
@@ -335,16 +395,24 @@ async fn create_agent(mcp_client: Arc<dyn McpClient>) -> Result<McpAgent, Error>
         .with_temperature(0.6f32)
         .with_max_tokens(8*1024);
     
-    // 创建Agent实例
-    let mut agent = McpAgent::with_openai_model(
+    // 创建内存模块实例
+    let memory = SimpleMemory::new();
+    
+    // 创建Agent实例，并传递memory参数
+    let mut agent = McpAgent::with_openai_model_and_memory(
         mcp_client.clone(),
         "You are an AI assistant who can use tools to answer user questions. Please decide whether to use tools based on user needs.".to_string(),
-        model.clone()
+        model.clone(),
+        Box::new(memory.clone())
     );
 
     // 自动从MCP客户端获取工具并添加到Agent
+    info!("Auto-adding tools to McpAgent");
     if let Err(e) = agent.auto_add_tools().await {
-        error!("Failed to auto add tools to McpAgent: {}", e);
+        let error_msg = format!("Failed to auto add tools to McpAgent: {}", e);
+        error!("{}", error_msg);
+    } else {
+        info!("Successfully auto-added tools to McpAgent");
     }
     
     Ok(agent)
@@ -383,6 +451,11 @@ pub async fn create_chat_session(state: State<'_, Arc<Mutex<ChatbotState>>>) -> 
     // 创建新的Agent实例
     match create_agent(mcp_client).await {
         Ok(agent) => {
+            // 获取Agent的内存实例并存储在ChatbotState中
+            if let Some(memory) = agent.get_memory() {
+                chatbot_state.memories.insert(session_id.clone(), Arc::new(Mutex::new(memory.clone_box())));
+            }
+            
             chatbot_state.agents.insert(session_id.clone(), Arc::new(agent));
             Ok(session_id)
         },
@@ -399,7 +472,7 @@ pub struct LocalMcpTool {
 
 // Tauri命令：获取可用工具列表，匹配当前的mcp工具列表
 #[command]
-pub async fn get_available_tools(state: State<'_, Arc<Mutex<ChatbotState>>>) -> Result<String, String> {
+pub async fn get_available_tools(state: State<'_, Arc<Mutex<ChatbotState>>>) -> Result<Vec<LocalMcpTool>, String> {
     let chatbot_state = state.lock().await;
     
     // 确保MCP客户端已初始化
@@ -415,11 +488,18 @@ pub async fn get_available_tools(state: State<'_, Arc<Mutex<ChatbotState>>>) -> 
                     description: tool.description,
                 })
                 .collect();
-            
-            // 将工具列表转换为JSON字符串
-            serde_json::to_string(&local_tools).map_err(|e| e.to_string())
+                
+            // 记录工具名称以便调试
+            let tool_names: Vec<String> = local_tools.iter().map(|t| t.name.clone()).collect();
+            log::debug!("Available tools: {:?}", tool_names);
+                
+            Ok(local_tools)
         },
-        Err(e) => Err(format!("Failed to get tools list: {}", e))
+        Err(e) => {
+            log::error!("Failed to get tools from MCP client: {}", e);
+            // 返回空列表而不是错误，这样即使MCP服务器不可用，应用也能继续工作
+            Ok(Vec::new())
+        }
     }
 }
 

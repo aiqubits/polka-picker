@@ -1,273 +1,350 @@
-# Rust Agent Crate
+# Rust Agent: Next Generation AI Agent Framework for Web3
 
-一个用Rust编写的AI Agent框架，提供与大语言模型集成、工具调用、MCP服务连接等功能，帮助开发者构建强大的智能应用。
+Rust Agent is a powerful and flexible AI Agent framework built with Rust, designed to be aligned with LangChain-Core. It provides a comprehensive set of tools and components for building sophisticated AI agents that can interact with various systems and perform complex tasks.
 
-## 项目简介
+## Features
 
-Rust-Agent 是一个模块化的智能代理开发框架，设计用于简化基于大语言模型的应用开发。该框架提供了统一的执行接口、灵活的工具集成机制以及与MCP服务的无缝连接能力，使开发者能够快速构建具有推理和工具使用能力的智能应用。
+- **Modular Architecture**: Clean separation of concerns with well-defined modules for agents, tools, memory, models, and more.
+- **MCP Integration**: Built-in support for Model Context Protocol (MCP) client and server implementations.
+- **Flexible Tool System**: Extensible tool interface with support for custom implementations and MCP tool adapters.
+- **Multiple Model Support**: Integration with various AI models, including OpenAI-compatible APIs.
+- **Memory Management**: Built-in memory components for maintaining context across interactions.
+- **Asynchronous Design**: Fully async architecture leveraging Tokio for high-performance operations.
+- **Error Handling**: Comprehensive error handling using the anyhow crate.
 
-## 核心功能
+## Architecture Overview
 
-- **统一执行接口**：基于 `Runnable<I, O>` 接口的统一执行模型，支持同步、异步和流式处理
-- **大语言模型集成**：支持OpenAI等主流大语言模型的调用
-- **智能代理系统**：提供 `McpAgent` 等代理实现，支持上下文管理和工具调用
-- **工具调用机制**：灵活的工具注册和调用系统
-- **MCP服务集成**：与MCP服务的连接适配器
-- **异步编程支持**：基于Tokio的全异步设计
+The framework is organized into several key modules:
 
-## 架构概览
+### 1. Core Layer (Core)
+Defines the fundamental `Runnable` trait and related components that form the basis of all executable components in the framework.
 
-项目采用模块化设计，遵循依赖倒置原则和组合优于继承的设计理念。整个框架以 `Runnable<I, O>` 为核心抽象，构建了一个可组合的组件系统。
+### 2. Model Layer (Models)
+Provides interfaces and implementations for various AI models:
+- `ChatModel`: Interface for chat-based models
+- `OpenAIChatModel`: Implementation for OpenAI-compatible APIs
 
-```
-src/
-├── lib.rs          # 主入口和公共导出
-├── core/           # 核心抽象和接口
-├── models/         # 语言模型集成
-├── agents/         # 代理实现
-├── tools/          # 工具定义和实现
-├── mcp/            # MCP服务集成
-├── memory/         # 记忆功能（预留模块）
-└── callbacks/      # 回调机制（预留模块）
-```
+### 3. Agent Layer (Agents)
+Implements the core agent logic with the `Agent` interface and `AgentRunner` interface:
+- `McpAgent`: Main agent implementation with MCP service integration
+- `SimpleAgent`: Basic agent implementation for simpler use cases
 
-### 核心模块关系
+### 4. Tool Layer (Tools)
+Defines the tool interface and implementation mechanisms:
+- `Tool`: Core tool interface
+- `Toolkit`: Interface for managing groups of related tools
+- `ExampleTool`: Sample tool implementation for demonstration
 
-1. **Core**: 定义了 `Runnable<I, O>` 等核心接口，是整个框架的基础
-2. **Models**: 实现了 `ChatModel` 接口，负责与大语言模型交互
-3. **Agents**: 实现了 `Agent` 接口和 `Runnable` 接口，是应用的核心逻辑处理器
-4. **Tools**: 提供了工具定义和工具调用相关功能
-5. **MCP**: 提供了与MCP服务交互的客户端和适配器
+### 5. MCP Integration Layer (MCP)
+Provides components for interacting with MCP services:
+- `McpClient`: Interface for MCP client implementations
+- `SimpleMcpClient`: Basic MCP client implementation
+- `McpServer`: Interface for MCP server implementations
+- `SimpleMcpServer`: Basic MCP server implementation
+- `McpToolAdapter`: Adapter to integrate MCP tools with the framework's tool system
 
-## 架构设计详解
+## Installation
 
-### 1. 核心抽象层 (Core)
-
-Core模块定义了框架的基础抽象，以 `Runnable<I, O>` 接口为中心，提供了统一的执行模型。
-
-```rust
-// Runnable接口核心定义
-trait Runnable<I: Send + 'static, O: Send + 'static>: Send + Sync {
-    // 核心异步调用方法
-    fn invoke(&self, input: I) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>;
-    
-    // 批量处理方法
-    fn batch(&self, inputs: Vec<I>) -> Pin<Box<dyn Future<Output = Vec<Result<O, Error>>> + Send>>;
-    
-    // 流式处理方法
-    fn stream(&self, input: I) -> Box<dyn Stream<Item = Result<O, Error>> + Send>;
-    
-    // 用于克隆组件的辅助方法
-    fn clone_to_owned(&self) -> Box<dyn Runnable<I, O> + Send + Sync>;
-}
-```
-
-该模块还提供了组件组合机制，通过 `pipe` 函数和 `RunnableExt` 扩展trait实现组件间的链式调用，使开发者能够灵活组合各种功能组件。
-
-### 2. 模型层 (Models)
-
-Models模块负责与大语言模型的交互，定义了 `ChatModel` 接口作为统一抽象。
-
-```rust
-// ChatModel接口定义
-trait ChatModel: Send + Sync {
-    // 获取模型名称
-    fn model_name(&self) -> Option<&str>;
-    
-    // 获取基础URL
-    fn base_url(&self) -> String;
-    
-    // 核心方法：处理聊天消息
-    fn invoke(&self, messages: Vec<ChatMessage>) -> Pin<Box<dyn Future<Output = Result<ChatCompletion, Error>> + Send + '_>>;
-}
-```
-
-目前实现了 `OpenAIChatModel`，支持与OpenAI API的交互，包括传统的Chat Completions API和新的Responses API。该实现支持温度控制、最大令牌数设置等参数配置。
-
-### 3. 代理层 (Agents)
-
-Agents模块实现了智能代理的核心逻辑，定义了 `Agent` 接口和 `AgentRunner` 接口。
-
-```rust
-// Agent接口定义
-trait Agent: Send + Sync {
-    // 获取可用工具列表
-    fn tools(&self) -> Vec<Box<dyn Tool + Send + Sync>>;
-    
-    // 执行Agent动作
-    fn execute(&self, action: &AgentAction) -> Pin<Box<dyn Future<Output = Result<String, Error>> + Send + '_>>;
-    
-    // 克隆代理实例
-    fn clone_agent(&self) -> Box<dyn Agent>;
-}
-```
-
-`McpAgent` 是主要的代理实现，它集成了语言模型调用、工具管理和响应生成等功能，并提供了与MCP服务的集成能力。
-
-### 4. 工具层 (Tools)
-
-Tools模块定义了工具的接口和实现机制，以 `Tool` 接口为核心抽象。
-
-```rust
-// Tool接口定义
-trait Tool: Send + Sync {
-    // 获取工具名称
-    fn name(&self) -> &str;
-    
-    // 获取工具描述
-    fn description(&self) -> &str;
-    
-    // 核心执行方法
-    fn invoke(&self, input: &str) -> Pin<Box<dyn Future<Output = Result<String, Error>> + Send + '_>>;
-    
-    // 支持运行时类型检查
-    fn as_any(&self) -> &dyn std::any::Any;
-}
-```
-
-该模块还提供了 `Toolkit` 接口，用于管理一组相关的工具。
-
-### 5. MCP集成层
-
-MCP模块提供了与MCP服务交互的客户端和适配器，定义了 `McpClient` 接口和 `McpToolAdapter` 适配器类。
-
-```rust
-// McpClient接口定义
-trait McpClient: Send + Sync {
-    // 连接到MCP服务器
-    fn connect(&mut self, url: &str) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + '_>>;
-    
-    // 获取可用工具列表
-    fn get_tools(&self) -> Pin<Box<dyn Future<Output = Result<Vec<McpTool>, Error>> + Send + '_>>;
-    
-    // 调用指定工具
-    fn call_tool(&self, tool_name: &str, params: HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<Value, Error>> + Send + '_>>;
-    
-    // 断开连接
-    fn disconnect(&self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + '_>>;
-}
-```
-
-`SimpleMcpClient` 是 `McpClient` 的基本实现，提供了工具管理和调用功能。`McpToolAdapter` 将MCP工具适配为符合 `Tool` 接口的对象，实现了MCP工具与框架工具系统的无缝集成。
-
-## 设计模式应用
-
-1. **策略模式**：通过 `Runnable`、`ChatModel`、`Agent` 等接口实现算法族的封装和切换
-2. **适配器模式**：通过 `McpToolAdapter` 实现MCP工具与框架工具系统的适配
-3. **组合模式**：通过 `RunnableSequence` 和 `pipe` 函数实现组件的组合
-4. **工厂模式**：各种组件的创建方法如 `new()`、`with_xxx()` 提供了对象创建的统一接口
-5. **命令模式**：`AgentAction` 封装了工具调用请求，支持参数化和队列化
-
-## 快速开始
-
-### 安装
-
-在你的 `Cargo.toml` 文件中添加依赖：
+Add this to your `Cargo.toml`:
 
 ```toml
-dependencies = {
-    rust-agent = "0.0.1"
-}
+[dependencies]
+rust-agent = "0.0.5"
 ```
 
-### 基本用法
+## Quick Start
 
-下面是一个使用 `McpAgent` 构建简单对话机器人的示例：
+Here's a simple example of how to use the framework to create an AI agent:
 
 ```rust
 use rust_agent::{McpAgent, SimpleMcpClient, McpTool, ChatMessage, ChatMessageContent, AgentOutput};
 use std::sync::Arc;
 use std::collections::HashMap;
 
-// 创建MCP客户端
+// Create MCP client
 let mut mcp_client = SimpleMcpClient::new("http://localhost:8080".to_string());
 
-// 添加一些MCP工具
+// Add some MCP tools
 mcp_client.add_tools(vec![
     McpTool {
         name: "get_weather".to_string(),
-        description: "获取指定城市的天气信息".to_string(),
+        description: "Get weather information for a specified city".to_string(),
     }
 ]);
 
-// 将MCP客户端包装为Arc
+// Wrap MCP client as Arc
 let mcp_client_arc = Arc::new(mcp_client);
 
-// 创建McpAgent实例
+// Create McpAgent instance
 let mut agent = McpAgent::new(
     mcp_client_arc.clone(),
-    "gpt-3.5-turbo".to_string(),
-    "你是一个有用的助手".to_string()
-)
-.with_temperature(0.7f32)
-.with_max_tokens(1000);
+    "You are a helpful assistant".to_string()
+);
 
-// 自动添加来自MCP客户端的工具
+// Auto-add tools from MCP client
 if let Err(e) = agent.auto_add_tools().await {
-    println!("自动添加工具到 McpAgent 失败: {}", e);
+    println!("Failed to auto-add tools to McpAgent: {}", e);
 }
 
-// 构建用户输入
+// Build user input
 let mut input = HashMap::new();
-input.insert("input".to_string(), "北京今天的天气怎么样？".to_string());
+input.insert("input".to_string(), "What's the weather like in Beijing?".to_string());
 
-// 调用代理处理输入
+// Call agent to process input
 let result = agent.invoke(input).await;
 
-// 处理结果
+// Process result
 match result {
     Ok(AgentOutput::Finish(finish)) => {
         if let Some(answer) = finish.return_values.get("answer") {
-            println!("AI回复: {}", answer);
+            println!("AI Response: {}", answer);
         }
     },
     Ok(AgentOutput::Action(action)) => {
-        println!("需要调用工具: {}", action.tool);
-        // 执行工具调用...
+        println!("Need to call tool: {}", action.tool);
+        // Execute tool call...
         if let Some(thought) = &action.thought {
-            println!("思考: {}", thought);
+            println!("Thought: {}", thought);
         }
     },
     Err(e) => {
-        println!("发生错误: {}", e);
+        println!("Error occurred: {}", e);
     }
 }
 ```
 
-## 示例
+## MCP Server Implementation
 
-项目提供了多个示例，展示了如何使用框架构建不同类型的智能应用。示例位于 `examples/` 目录下。
+The framework now includes a built-in MCP server implementation:
 
-例如，`mcp_agent_chatbot.rs` 示例展示了如何使用 `McpAgent` 构建一个简单的聊天机器人：
+```rust
+use rust_agent::{SimpleMcpServer, McpServer, ExampleTool};
 
-```bash
-# 运行示例
-cargo run --example mcp_agent_chatbot
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create MCP server instance
+    let server = SimpleMcpServer::new().with_address("127.0.0.1:3000".to_string());
+    
+    // Create example tools
+    let weather_tool = ExampleTool::new(
+        "get_weather".to_string(),
+        "Get weather information for a specified city".to_string()
+    );
+    
+    let calculator_tool = ExampleTool::new(
+        "calculate".to_string(),
+        "Perform simple mathematical calculations".to_string()
+    );
+    
+    // Register tools with the server
+    server.register_tool(Box::new(weather_tool))?;
+    server.register_tool(Box::new(calculator_tool))?;
+    
+    // Start the server
+    server.start("127.0.0.1:3000").await?;
+    
+    println!("MCP server started at 127.0.0.1:3000");
+    println!("Registered tools: get_weather, calculate");
+    
+    // Simulate server running for a while
+    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    
+    // Stop the server
+    server.stop().await?;
+    println!("MCP server stopped");
+    
+    Ok(())
+}
 ```
 
-## 配置和环境变量
+### MCP Server API
 
-使用框架时，可能需要配置以下环境变量：
+The MCP server implementation provides the following core functionality:
 
-- `OPENAI_API_KEY`: OpenAI API密钥
-- `OPENAI_API_URL`: OpenAI API基础URL（可选，默认为OpenAI官方API）
+1. **Server Management**:
+   - `start()`: Start the MCP server on a specified address
+   - `stop()`: Stop the running MCP server
+   - `with_address()`: Configure the server address
 
-## 注意事项
+2. **Tool Registration**:
+   - `register_tool()`: Register a tool with the server for use by MCP clients
 
-- 框架使用异步编程模型，需要配合Tokio运行时
-- 工具调用需要实现 `Tool` 接口或使用 `McpToolAdapter` 适配器
-- 当前版本可能存在一些未实现的功能或简化实现，使用时需要注意
+3. **Implementation Details**:
+   - The server uses a simple in-memory store for registered tools
+   - Thread-safe implementation using Arc and Mutex for concurrent access
+   - Built on top of the standard `Tool` trait for maximum flexibility
 
-## 开发和贡献
+### Creating Custom Tools
 
-如果你想为项目做贡献，请遵循以下步骤：
+To create custom tools for use with the MCP server, you need to implement the `Tool` trait:
 
-1. Fork 仓库
-2. 创建你的特性分支
-3. 提交你的更改
-4. 推送到分支
-5. 创建一个 Pull Request
+```rust
+use rust_agent::Tool;
+use anyhow::Error;
+use std::pin::Pin;
+
+pub struct CustomTool {
+    name: String,
+    description: String,
+}
+
+impl CustomTool {
+    pub fn new(name: String, description: String) -> Self {
+        Self { name, description }
+    }
+}
+
+impl Tool for CustomTool {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    
+    fn description(&self) -> &str {
+        &self.description
+    }
+    
+    fn invoke(&self, input: &str) -> Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send + '_>> {
+        let input_str = input.to_string();
+        let name = self.name.clone();
+        
+        Box::pin(async move {
+            // Your custom tool logic here
+            Ok(format!("Custom tool {} processed: {}", name, input_str))
+        })
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+```
+
+## Examples
+
+The project provides several examples demonstrating how to use the framework to build different types of AI agents. Examples are located in the `examples/` directory.
+
+- `agent_example.rs`: Basic agent usage example
+- `mcp_agent_client_chatbot.rs`: MCP client chatbot example (uses server-side tools only)
+- `mcp_agent_hybrid_chatbot.rs`: Hybrid mode MCP agent example (local get_local_time tool + server-side tools)
+- `mcp_agent_local_chatbot.rs`: Local MCP agent chatbot example (uses local tools only)
+- `mcp_server_complete_example.rs`: Complete MCP server example with real tool implementations (provides get_weather and simple_calculate tools)
+
+### 1. Basic Agent Example (`agent_example.rs`)
+
+Shows how to create a simple agent with custom tools:
+
+```bash
+# Run the example
+cargo run --example agent_example
+```
+
+### 2. MCP Agent Client Chatbot (`mcp_agent_client_chatbot.rs`)
+
+Demonstrates how to use `McpAgent` to build a simple chatbot that connects to an MCP server and uses server-side tools only. This example shows a pure client implementation that relies entirely on remote tools:
+
+- No local tools are implemented
+- All tools are provided by the MCP server (e.g., `get_weather`, `simple_calculate`)
+
+```bash
+# Run the example
+cargo run --example mcp_agent_client_chatbot
+```
+
+### 3. Hybrid Mode MCP Agent Chatbot (`mcp_agent_hybrid_chatbot.rs`)
+
+Demonstrates how to use `McpAgent` in hybrid mode, combining local tools (like get_local_time) with server-side tools. This example shows how an agent can use both local and remote tools based on the task requirements:
+
+- Local tool: `get_local_time` - Gets the current local time and date
+- Remote tools: All tools provided by the MCP server (e.g., `get_weather`, `simple_calculate`)
+
+```bash
+# Run the example
+cargo run --example mcp_agent_hybrid_chatbot
+```
+
+### 4. Local MCP Agent Chatbot (`mcp_agent_local_chatbot.rs`)
+
+Demonstrates how to use `McpAgent` with local tools only. This example shows how an agent can function without connecting to any remote MCP server, using only locally implemented tools:
+
+- Local tools: 
+  - `get_weather` - Gets weather information for a specified city
+  - `simple_calculate` - Performs simple mathematical calculations
+
+```bash
+# Run the example
+cargo run --example mcp_agent_local_chatbot
+```
+
+### 5. Complete MCP Server (`mcp_server_complete_example.rs`)
+
+A more complete example showing how to implement custom tools with actual functionality such as get_weather and simple_calculate:
+
+```bash
+# Run the example
+cargo run --example mcp_server_complete_example
+```
+
+## Running Tests
+
+The project includes unit tests to verify the functionality of the framework:
+
+```bash
+# Run all tests
+cargo test
+```
+
+## Building the Project
+
+To build the project, simply run:
+
+```bash
+# Build the project
+cargo build
+```
+
+The project builds successfully with only warnings about unused fields in some structs, which don't affect functionality.
+
+## Project Demo
+
+The project includes demonstration scripts to showcase all functionality:
+
+### Bash Script (Linux/macOS)
+```bash
+# Run the demo script
+./demo.sh
+```
+
+### PowerShell Script (Windows)
+```powershell
+# Run the demo script
+.\demo.ps1
+```
+
+These scripts will run all tests and examples to demonstrate the capabilities of the Rust Agent framework.
+
+## Configuration and Environment Variables
+
+When using the framework, you may need to configure the following environment variables:
+
+- `OPENAI_API_KEY`: OpenAI API key
+- `OPENAI_API_URL`: OpenAI API base URL (optional, defaults to official OpenAI API)
+
+## Notes
+
+- The framework uses asynchronous programming model, requiring Tokio runtime
+- Tool invocation requires implementing the `Tool` interface or using the `McpToolAdapter`
+- The current version may have some unimplemented features or simplified implementations, please note when using
+
+## Development and Contribution
+
+If you'd like to contribute to the project, please follow these steps:
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
-[MIT License](LICENSE)
+[GPL-3.0](LICENSE)

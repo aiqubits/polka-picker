@@ -3,7 +3,7 @@ use rust_agent::{ExampleTool, SimpleAgent, SimpleAgentRunner, AgentOutput, Runna
 use std::collections::HashMap;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Rust Agent v0.0.1 - Agent使用示例 ===");
     
     // 创建一个简单的Agent
@@ -20,7 +20,20 @@ async fn main() {
     // 创建Agent运行器
     let agent_runner = SimpleAgentRunner::new(agent);
     
+    // 测试调用工具
     println!("\n1. 测试调用工具:");
+    test_tool_invocation(&agent_runner).await?;
+    
+    // 测试直接完成
+    println!("\n2. 测试直接完成:");
+    test_direct_completion(&agent_runner).await?;
+    
+    println!("\n示例完成！");
+    Ok(())
+}
+
+/// 测试工具调用功能
+async fn test_tool_invocation(agent_runner: &SimpleAgentRunner) -> Result<(), Box<dyn std::error::Error>> {
     let mut tool_inputs = HashMap::new();
     tool_inputs.insert("tool".to_string(), "get_weather".to_string());
     tool_inputs.insert("input".to_string(), "北京".to_string());
@@ -40,9 +53,13 @@ async fn main() {
         Err(e) => println!("错误: {}", e),
     }
     
-    println!("\n2. 测试直接完成:");
+    Ok(())
+}
+
+/// 测试直接完成功能
+async fn test_direct_completion(agent_runner: &SimpleAgentRunner) -> Result<(), Box<dyn std::error::Error>> {
     let mut finish_inputs = HashMap::new();
-    finish_inputs.insert("input".to_string(), "你好，请介绍一下你自己".to_string());
+    finish_inputs.insert("input".to_string(), "北京的天气如何".to_string());
     
     match agent_runner.invoke(finish_inputs).await {
         Ok(output) => match output {
@@ -59,5 +76,5 @@ async fn main() {
         Err(e) => println!("错误: {}", e),
     }
     
-    println!("\n示例完成！");
+    Ok(())
 }

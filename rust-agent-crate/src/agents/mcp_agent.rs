@@ -4,9 +4,10 @@ use std::sync::Arc;
 use log::info;
 
 use crate::{
-    Agent, AgentAction, AgentFinish, AgentOutput, ChatMessage, ChatMessageContent, ChatModel,
+    Agent, AgentAction, AgentFinish, AgentOutput, BaseMemory, ChatMessage, ChatMessageContent, ChatModel,
     McpClient, McpToolAdapter, OpenAIChatModel, Runnable, Tool, parse_model_output
 };
+use serde_json::Value;
 
 /// McpAgent 是一个基于 MCP 服务的智能体实现
 /// 它能够连接 MCP 服务器，处理用户输入，调用工具，并生成响应
@@ -15,6 +16,7 @@ pub struct McpAgent {
     tools: Vec<Box<dyn Tool + Send + Sync>>,
     system_prompt: String,
     openai_model: Option<OpenAIChatModel>,
+    memory: Option<Box<dyn BaseMemory>>,
 }
 
 impl McpAgent {
@@ -25,6 +27,7 @@ impl McpAgent {
             tools: Vec::new(),
             system_prompt,
             openai_model: None, // 默认不设置OpenAI模型
+            memory: None, // 默认不设置记忆模块
         }
     }
     
@@ -35,7 +38,35 @@ impl McpAgent {
             tools: Vec::new(),
             system_prompt,
             openai_model: Some(openai_model),
+            memory: None, // 默认不设置记忆模块
         }
+    }
+    
+    /// 创建一个新的 McpAgent 实例，并指定记忆模块
+    pub fn with_memory(client: Arc<dyn McpClient>, system_prompt: String, memory: Box<dyn BaseMemory>) -> Self {
+        Self {
+            client,
+            tools: Vec::new(),
+            system_prompt,
+            openai_model: None,
+            memory: Some(memory),
+        }
+    }
+    
+    /// 创建一个新的 McpAgent 实例，并指定 OpenAIChatModel 和记忆模块
+    pub fn with_openai_model_and_memory(client: Arc<dyn McpClient>, system_prompt: String, openai_model: OpenAIChatModel, memory: Box<dyn BaseMemory>) -> Self {
+        Self {
+            client,
+            tools: Vec::new(),
+            system_prompt,
+            openai_model: Some(openai_model),
+            memory: Some(memory),
+        }
+    }
+
+    /// 获取记忆模块的引用
+    pub fn get_memory(&self) -> Option<&Box<dyn BaseMemory>> {
+        self.memory.as_ref()
     }
 
     /// 向 Agent 添加一个工具
@@ -45,11 +76,17 @@ impl McpAgent {
     
     /// 自动从 MCP 客户端获取工具并添加到 Agent
     /// 这个方法会从 MCP 客户端获取所有可用工具，并将它们包装为 McpToolAdapter 后添加到 Agent
+    /// 本地工具的注册与添加由调用者处理
     pub async fn auto_add_tools(&mut self) -> Result<(), anyhow::Error> {
         use crate::McpToolAdapter;
         
         // 从 MCP 客户端获取工具列表
         let tools = self.client.get_tools().await?;
+
+        // 打印获取到的工具信息
+        for tool in &tools {
+            info!("MCP Client Get Tool: {} - {}", tool.name, tool.description);
+        }
         
         // 将每个工具包装为 McpToolAdapter 并添加到 Agent
         for tool in tools {
@@ -127,6 +164,7 @@ impl Clone for McpAgent {
             tools: Vec::new(), // 不复制工具，因为 Box<dyn Tool> 不能直接克隆
             system_prompt: self.system_prompt.clone(),
             openai_model: self.openai_model.clone(), // 克隆OpenAI模型实例
+            memory: self.memory.clone(), // 克隆记忆模块
         }
     }
 }
@@ -157,10 +195,20 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
             String::new()
         };
 
-        // 构建增强的系统提示词
+        // 提前捕获记忆模块，避免在async move中使用self
+        let memory_clone = self.memory.clone();
+
+        // 构建增强的系统提示词，采用ReAct框架格式
         let enhanced_system_prompt = if !tool_descriptions.is_empty() {
-            // 否则返回{{\"content\": \"回答内容\"}}
-            format!("{}\n\nAvailable tools:\n{}\n\nPlease decide whether to use the tool based on user needs. If tools are needed, please return in JSON format:{{\"call_tool\": {{\"name\": \"Tool Name\", \"parameters\": {{...}}}}}}, else return{{}}", system_prompt, tool_descriptions)
+            format!("{}
+You are an AI assistant that follows the ReAct (Reasoning and Acting) framework. 
+You should think step by step and decide whether to use tools based on user needs.
+You should carefully review and when confirming the use of the tool, if there are omissions, errors, or other issues with the parameters, you should reply and remind the user.
+Available tools:\n{}\n\nWhen you need to use a tool, please respond in the following JSON format:
+            \n{{\"call_tool\": {{\"name\": \"Tool Name\", \"parameters\": {{\"parameter_name\": \"parameter_value\"}}}}}}
+        When you don't need to use a tool, please respond in the following JSON format:\n{{\"content\": \"Your answer\"}}
+        Please think carefully about whether the user's request requires a tool to be used, and only use tools when necessary.", 
+            system_prompt, tool_descriptions)
         } else {
             system_prompt
         };
@@ -205,12 +253,95 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
                 additional_kwargs: std::collections::HashMap::new(),
             }));
 
-            // 添加用户消息
+            // 如果有记忆模块，加载记忆变量并添加到消息列表中
+            if let Some(memory) = &memory_clone {
+                match memory.load_memory_variables(&std::collections::HashMap::new()).await {
+                    Ok(memories) => {
+                        info!("加载记忆变量: {:?}", memories);
+                        if let Some(chat_history) = memories.get("chat_history") {
+                            if let serde_json::Value::Array(messages_array) = chat_history {
+                                for message in messages_array {
+                                    if let serde_json::Value::Object(msg_obj) = message {
+                                        let role = msg_obj.get("role").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                        let content = msg_obj.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                                        
+                                        // 添加调试日志
+                                        log::info!("加载消息: role={}, content={}", role, content);
+                                        
+                                        match role {
+                                            "human" => {
+                                                // 添加调试日志
+                                                log::info!("加载人类消息: content={}", content);
+                                                messages.push(ChatMessage::Human(ChatMessageContent {
+                                                    content: content.to_string(),
+                                                    name: None,
+                                                    additional_kwargs: std::collections::HashMap::new(),
+                                                }));
+                                            },
+                                            "ai" => {
+                                                // 添加调试日志
+                                                log::info!("加载AI消息: content={}", content);
+                                                messages.push(ChatMessage::AIMessage(ChatMessageContent {
+                                                    content: content.to_string(),
+                                                    name: None,
+                                                    additional_kwargs: std::collections::HashMap::new(),
+                                                }));
+                                            },
+                                            "tool" => {
+                                                // 处理工具消息
+                                                let content_str = content.to_string();
+                                                // 添加调试日志
+                                                log::info!("加载工具消息: content={}", content_str);
+                                                messages.push(ChatMessage::ToolMessage(ChatMessageContent {
+                                                    content: content_str,
+                                                    name: None,
+                                                    additional_kwargs: std::collections::HashMap::new(),
+                                                }));
+                                            },
+                                            _ => {
+                                                // 添加调试日志
+                                                log::info!("加载未知角色消息: role={}, content={}", role, content);
+                                                // 忽略未知角色的消息
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        // 如果加载记忆失败，记录错误但继续执行
+                        log::warn!("Failed to load memory variables: {}", e);
+                    }
+                }
+            }
+
+            // 添加当前用户消息
             messages.push(ChatMessage::Human(ChatMessageContent {
                 content: input_text.clone(),
                 name: None,
                 additional_kwargs: std::collections::HashMap::new(),
             }));
+            info!("添加当前用户消息: role=user, content={}", input_text);
+            
+            // 添加调试日志，显示所有消息
+            log::info!("准备发送给模型的消息:");
+            for (i, msg) in messages.iter().enumerate() {
+                match msg {
+                    ChatMessage::System(content) => {
+                        log::info!("  {}. role=system, content={}", i+1, content.content);
+                    },
+                    ChatMessage::Human(content) => {
+                        log::info!("  {}. role=user, content={}", i+1, content.content);
+                    },
+                    ChatMessage::AIMessage(content) => {
+                        log::info!("  {}. role=assistant, content={}", i+1, content.content);
+                    },
+                    ChatMessage::ToolMessage(content) => {
+                        log::info!("  {}. role=tool, content={}", i+1, content.content);
+                    },
+                }
+            }
 
             // 调用语言模型
             let result = model.invoke(messages).await;
@@ -225,6 +356,19 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
 
                     // 从OpenAI模型获取模型名称，如果没有则使用默认值
                     let model_name = model.model_name().map(|s| s.to_string()).unwrap_or("unknown".to_string());
+
+                    // 如果有记忆模块，保存当前对话到记忆中
+                    if let Some(memory) = &memory_clone {
+                        let mut inputs = std::collections::HashMap::new();
+                        inputs.insert("input".to_string(), serde_json::Value::String(input_text.clone()));
+                        
+                        let mut outputs = std::collections::HashMap::new();
+                        outputs.insert("output".to_string(), serde_json::Value::String(content.clone()));
+                        
+                        if let Err(e) = memory.save_context(&inputs, &outputs).await {
+                            log::warn!("Failed to save context to memory: {}", e);
+                        }
+                    }
 
                     // 解析模型输出，判断是否需要调用工具
                     // 这里应该正确解析模型输出的JSON格式
@@ -243,16 +387,20 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
                             }
                         }
                     } else {
-                        // 如果解析失败，检查是否包含工具调用关键词
-                        if content.contains("call_tool") && content.contains("get_weather") {
+                        // 如果解析失败，尝试提取工具调用信息
+                        // 检查是否包含工具调用关键词
+                        if content.contains("call_tool") {
                             // 尝试从内容中提取JSON格式的工具调用
-                            // 这里简化实现，直接返回一个默认的工具调用
-                            Ok(AgentOutput::Action(AgentAction {
-                                tool: "default_tool".to_string(),
-                                tool_input: "{\"default_input\": \"Default Input\"}".to_string(),
-                                log: "Call default tool".to_string(),
-                                thought: Some("Model output parsing failed, call default tool".to_string()),
-                            }))
+                            // 这里应该更智能地解析工具调用，而不是使用默认工具
+                            if let Ok(agent_action) = parse_tool_call_from_content(&content) {
+                                Ok(AgentOutput::Action(agent_action))
+                            } else {
+                                // 如果无法解析工具调用，直接返回回答
+                                let mut return_values = std::collections::HashMap::new();
+                                return_values.insert("answer".to_string(), content.clone());
+                                return_values.insert("model".to_string(), model_name);
+                                Ok(AgentOutput::Finish(AgentFinish { return_values }))
+                            }
                         } else {
                             // 直接返回回答
                             let mut return_values = std::collections::HashMap::new();
@@ -285,4 +433,64 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
     {
         Box::new(self.clone())
     }
+}
+
+/// 从内容中提取JSON对象字符串
+fn extract_json_object(content: &str) -> Option<String> {
+    // 查找第一个 '{' 和最后一个 '}'
+    if let Some(start) = content.find('{') {
+        if let Some(end) = content.rfind('}') {
+            if end > start {
+                // 提取可能的JSON对象
+                let json_str = &content[start..=end];
+                
+                // 验证是否是有效的JSON对象
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+                    if value.is_object() {
+                        return Some(json_str.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 从内容中解析工具调用
+fn parse_tool_call_from_content(content: &str) -> Result<AgentAction, anyhow::Error> {
+    // 尝试提取JSON对象
+    if let Some(json_str) = extract_json_object(content) {
+        // 解析JSON
+        let value: Value = serde_json::from_str(&json_str)?;
+        
+        // 检查是否有call_tool字段
+        if let Some(call_tool) = value.get("call_tool").and_then(|v| v.as_object()) {
+            // 提取工具名称
+            let tool_name = call_tool
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?
+                .to_string();
+            
+            // 提取参数并转换为字符串
+            let tool_input = call_tool
+                .get("parameters")
+                .cloned()
+                .unwrap_or(Value::Object(serde_json::Map::new()))
+                .to_string();
+            
+            // 创建AgentAction
+            let action = AgentAction {
+                tool: tool_name,
+                tool_input,
+                log: content.to_string(),
+                thought: None,
+            };
+            
+            return Ok(action);
+        }
+    }
+    
+    // 如果无法解析，返回错误
+    Err(anyhow::anyhow!("Failed to parse tool call from content"))
 }

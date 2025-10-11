@@ -12,10 +12,10 @@ mod mcp;
 pub use core::{Runnable, RunnableExt, RunnableSequence};
 pub use models::{ChatModel, ChatMessage, ChatMessageContent, ChatCompletion, TokenUsage, OpenAIChatModel};
 pub use tools::{Tool, Toolkit, ExampleTool, ExampleToolkit, find_matching_tool_index, parse_model_output};
-pub use memory::BaseMemory;
+pub use memory::{BaseMemory, SimpleMemory};
 pub use agents::{Agent, McpAgent, AgentAction, AgentFinish, AgentOutput, AgentRunner, SimpleAgent, SimpleAgentRunner};
 pub use callbacks::CallbackHandler;
-pub use mcp::{McpClient, SimpleMcpClient, McpTool, McpToolAdapter};
+pub use mcp::{McpClient, SimpleMcpClient, McpTool, McpToolAdapter, McpServer, SimpleMcpServer};
 use anyhow::Error;
 use std::collections::HashMap;
 
@@ -29,6 +29,7 @@ pub async fn run_agent(agent: &McpAgent, input: String) -> Result<String, Error>
     let mut inputs = HashMap::new();
     inputs.insert("input".to_string(), input);
     let output = agent.invoke(inputs).await?;
+    
     match output {
         AgentOutput::Action(action) => {
             // 查找对应的工具，使用模糊匹配机制
@@ -40,14 +41,26 @@ pub async fn run_agent(agent: &McpAgent, input: String) -> Result<String, Error>
                         // 调用工具
                         let tool_result = tool.invoke(&action.tool_input).await?;
                         
-                        // 这里可以选择是否将结果传回给Agent进行进一步处理
-                        Ok(format!("Task {} executed successfully, result: {}", matched_name, tool_result))
+                        // 将工具执行结果反馈给Agent进行进一步处理
+                        let mut new_inputs = HashMap::new();
+                        new_inputs.insert("input".to_string(), format!("[CUSTOMIZE_TOOL_RESULT] {{\"tool\": \"{}\", \"result\": {}}}", matched_name, tool_result));
+                        let new_output = agent.invoke(new_inputs).await?;
+                        
+                        match new_output {
+                            AgentOutput::Finish(finish) => {
+                                Ok(finish.return_values.get("answer").map(|s| s.clone()).unwrap_or_else(|| "".to_string()))
+                            },
+                            _ => {
+                                // 如果还是Action，先简单返回工具结果
+                                Ok(format!("Tool {} executed successfully, result: {}", matched_name, tool_result))
+                            }
+                        }
                     } else {
-                        Err(Error::msg(format!("Task {} does not exist", matched_name)))
+                        Err(Error::msg(format!("Tool {} does not exist", matched_name)))
                     }
                 },
                 None => {
-                    Err(Error::msg(format!("Task {} does not exist", action.tool)))
+                    Err(Error::msg(format!("Tool {} does not exist", action.tool)))
                 }
             }
         },

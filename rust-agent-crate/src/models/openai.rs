@@ -12,6 +12,8 @@ struct OpenAIMessage {
     role: String,
     content: String,
     name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
 }
 
 // 令牌使用详情结构体 - 参考LangChain的InputTokenDetails和OutputTokenDetails
@@ -250,21 +252,32 @@ impl ChatModel for OpenAIChatModel {
                         role: "system".to_string(),
                         content: content.content,
                         name: content.name,
+                        tool_call_id: None,
                     },
                     ChatMessage::Human(content) => OpenAIMessage {
                         role: "user".to_string(),
                         content: content.content,
                         name: content.name,
+                        tool_call_id: None,
                     },
                     ChatMessage::AIMessage(content) => OpenAIMessage {
                         role: "assistant".to_string(),
                         content: content.content,
                         name: content.name,
+                        tool_call_id: None,
                     },
-                    ChatMessage::ToolMessage(content) => OpenAIMessage {
-                        role: "tool".to_string(),
-                        content: content.content,
-                        name: content.name,
+                    ChatMessage::ToolMessage(content) => {
+                        info!("转换工具消息: role=tool, content={}", content.content);
+                        // 为工具消息添加tool_call_id
+                        let tool_call_id = content.additional_kwargs.get("tool_call_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("default_tool_call_id").to_string();
+                        OpenAIMessage {
+                            role: "tool".to_string(),
+                            content: content.content,
+                            name: content.name,
+                            tool_call_id: Some(tool_call_id),
+                        }
                     },
                 })
                 .collect();
@@ -300,7 +313,7 @@ impl ChatModel for OpenAIChatModel {
             for (key, value) in additional_headers {
                 request = request.header(key, value);
             }
-            info!("OpenAI request body: {:?}", request_body);
+            
             // 发送请求
             let response = request.json(&request_body).send().await?;
             

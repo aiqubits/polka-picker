@@ -325,7 +325,7 @@ pub enum TaskStatus {
 }
 
 impl TaskStatus {
-    fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             TaskStatus::Running => "Running",
             TaskStatus::Idle => "Idle",

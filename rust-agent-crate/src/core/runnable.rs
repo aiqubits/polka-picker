@@ -64,13 +64,13 @@ pub trait Runnable<I: Send + 'static, O: Send + 'static>: Send + Sync {
     // 异步流式处理 - 可选实现
     fn astream(
         &self, 
-        input: I
+        _input: I
     ) -> Pin<Box<dyn std::future::Future<Output = Box<dyn Stream<Item = Result<O, anyhow::Error>> + Send>> + Send>> {
-        let self_clone = self.clone_to_owned();
+        let _self_clone = self.clone_to_owned();
         
         Box::pin(async move {
             // 简单实现：返回一个空的流
-            let (tx, rx) = mpsc::channel(10);
+            let (_tx, rx) = mpsc::channel(10);
             // 创建并返回一个空流，添加显式类型转换
             let stream: Box<dyn Stream<Item = Result<O, anyhow::Error>> + Send> = Box::new(ReceiverStream::new(rx));
             stream
