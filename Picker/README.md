@@ -67,7 +67,19 @@ https://github.com/conflux-fans/summerhackfest-2025/tree/main/projects/picker
 - 2025-10-20: Add Readme, Dos, PPT for Polka.
 - 2025-10-23: Redefine the data types of custom contracts on-chain, and solidity contract tests, nodejs contract tests.
 - 2025-10-24: Add api settings for Desktop Chatbot blockchain and other related optimizations.
-- 2025-10-25: Complete local validation testing of Polka Revm integration.
+- 2025-10-26: Complete the deployment and code verification of smart contract testing integration for the Polka passet-hub testnet.
+
+
+### Smart Contract  
+
+ERC20FactoryModule#ERC20Factory - 0x9BB37Ddf2f574b71C847F4659cBea7518fe172ee
+https://blockscout-passet-hub.parity-testnet.parity.io/address/0x9BB37Ddf2f574b71C847F4659cBea7518fe172ee#code
+
+ERC721FactoryModule#ERC721Factory - 0x9Dd5bCd24115E24774C43ee5811444AC57004D4f
+https://blockscout-passet-hub.parity-testnet.parity.io/address/0x9BB37Ddf2f574b71C847F4659cBea7518fe172ee#code
+
+PickerPaymentModule#PickerPayment - 0xc7a5983345b8577B0D27A7255e62A495A7AE8e7d
+https://blockscout-passet-hub.parity-testnet.parity.io/address/0xc7a5983345b8577B0D27A7255e62A495A7AE8e7d#code
 
 # Team info
 
@@ -164,10 +176,10 @@ ai_api_key = ""
 ai_model = "deepseek-chat"
 
 [blockchain]
-rpc_url = "https://sepolia.infura.io/v3/xxx"
-explorer_url = "https://sepolia.etherscan.io"
+rpc_url = "https://testnet-passet-hub-eth-rpc.polkadot.io"
+explorer_url = "https://blockscout-passet-hub.parity-testnet.parity.io"
 wallet_private_key = ""
-token_usdt_url = "https://www.okx.com/api/v5/market/ticker?instId=ETH-USDT"
+token_usdt_url = "https://www.okx.com/api/v5/market/ticker?instId=DOT-USDT"
 # sepolia cross chain pay
 usdt_contract_address = "0xd53e9530107a8d8856099d7d80126478d48e06dA"
 meson_contract_address = "0x0d12d15b26a32e72A3330B2ac9016A22b1410CB6"
@@ -202,4 +214,4 @@ Password: testpassword
 
 - 1-3 weeks after the hackathon: The PC store can be launched immediately or a self-built official website can be set up. The official website has been completed at https://www.openpick.org/
 - 1-3 months after the hackathon: Improve the registration mechanism of the task market, optimize the AI Agent framework, complete more example applications of agent tasks, and provide more on-chain contract capability interfaces
-- Expected value to the Ethereum ecosystem: Make Ethereum truly integrate into the daily work, life, and entertainment of ordinary internet users
+- Expected value to the Polkadot Smart Contract APP ecosystem: Make Polkadot Smart Contract APP truly integrate into the daily work, life, and entertainment of ordinary internet users

@@ -23,6 +23,13 @@ const config: HardhatUserConfig = {
       type: "edr-simulated",
       chainType: "op",
     },
+    "passet-hub": {
+      type: "http",
+      chainType: "l1",
+      url: 'https://testnet-passet-hub-eth-rpc.polkadot.io',
+      // url: 'https://blockscout-passet-hub.parity-testnet.parity.io/api/eth-rpc',
+      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+    },    
     customize: {
       type: "http",
       chainType: "l1",
@@ -31,23 +38,41 @@ const config: HardhatUserConfig = {
     },
   },
   chainDescriptors: {
-    11155111: {
-      name: "Sepolia",
+    420420422: {
+      name: "passet-hub",
       chainType: "l1",
       blockExplorers: {
         etherscan: {
-          name: "Sepolia Explorer",
-          url: "https://sepolia.etherscan.io/",
-          apiUrl: "https://api.etherscan.io/v2/api",
+          name: "passet-hub",
+          url: "https://blockscout-passet-hub.parity-testnet.parity.io",
+          apiUrl: "https://blockscout-passet-hub.parity-testnet.parity.io/api",
         },
       },
     },
   },
   verify:{
     etherscan: {
-      apiKey: configVariable("ETHERSCAN_API_KEY"),
+      apiKey: 'empty',
     }
-  }
+  }  
+  // chainDescriptors: {
+  //   11155111: {
+  //     name: "Sepolia",
+  //     chainType: "l1",
+  //     blockExplorers: {
+  //       etherscan: {
+  //         name: "Sepolia Explorer",
+  //         url: "https://sepolia.etherscan.io/",
+  //         apiUrl: "https://api.etherscan.io/v2/api",
+  //       },
+  //     },
+  //   },
+  // },
+  // verify:{
+  //   etherscan: {
+  //     apiKey: configVariable("ETHERSCAN_API_KEY"),
+  //   }
+  // }
 };
 
 export default config;
