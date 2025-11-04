@@ -1,4 +1,4 @@
-// 工具适配器定义
+// Tool adapter definition
 use anyhow::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::tools::Tool;
 use super::client::{McpClient, McpTool};
 use log::info;
-// MCP工具适配器
+// MCP tool adapter
 pub struct McpToolAdapter {
     mcp_client: Arc<dyn McpClient>,
     mcp_tool: McpTool,
@@ -20,7 +20,7 @@ impl McpToolAdapter {
         }
     }
     
-    // 从Box转换为Arc的构造方法
+    // Constructor method to convert from Box to Arc
     pub fn new_from_box(mcp_client: Box<dyn McpClient>, mcp_tool: McpTool) -> Self {
         Self {
             mcp_client: Arc::from(mcp_client),
@@ -28,12 +28,12 @@ impl McpToolAdapter {
         }
     }
     
-    // 获取客户端的引用
+    // Get reference to the client
     pub fn get_client(&self) -> Arc<dyn McpClient> {
         self.mcp_client.clone()
     }
     
-    // 获取MCP工具的克隆
+    // Get clone of the MCP tool
     pub fn get_mcp_tool(&self) -> McpTool {
         self.mcp_tool.clone()
     }
@@ -54,27 +54,27 @@ impl Tool for McpToolAdapter {
         let input_str = input.to_string();
         info!("Invoking MCP tool {} with input: {}", tool_name, input_str);
         Box::pin(async move {
-            // 尝试解析输入为JSON参数，增加容错处理
+            // Try to parse input as JSON parameters, add fault tolerance
             let parameters: HashMap<String, Value> = match serde_json::from_str(&input_str) {
                 Ok(params) => params,
                 Err(_) => {
-                    // 简单处理，将输入作为默认参数
+                    // Simple handling, use input as default parameter
                     let mut map = HashMap::new();
                     map.insert("query".to_string(), Value::String(input_str.clone()));
                     map
                 },
             };
             
-            // 调用MCP服务器上的工具
+            // Call the tool on the MCP server
             let result_future = client.call_tool(&tool_name, parameters);
             let result = result_future.await?;
             
-            // 将结果转换为字符串
+            // Convert result to string
             Ok(serde_json::to_string_pretty(&result)?)
         })
     }
     
-    // 实现 as_any 方法以支持运行时类型检查
+    // Implement as_any method to support runtime type checking
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

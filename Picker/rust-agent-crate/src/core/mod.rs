@@ -1,5 +1,5 @@
-// 核心模块定义
+// Core module definition
 mod runnable;
 
-// 重新导出模块内容
+// Re-export module content
 pub use runnable::{Runnable, RunnableExt, RunnableSequence, pipe};

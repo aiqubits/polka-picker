@@ -1,5 +1,5 @@
-// 提示模板模块定义
+// Prompt template module definition
 mod template;
 
-// 重新导出模块内容
+// Re-export module content
 pub use template::PromptTemplate;

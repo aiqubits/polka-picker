@@ -4,13 +4,13 @@ use std::sync::Arc;
 use log::info;
 
 use crate::{
-    Agent, AgentAction, AgentFinish, AgentOutput, BaseMemory, ChatMessage, ChatMessageContent, ChatModel,
+    Agent, AgentAction, AgentFinish, AgentOutput, BaseMemory, ModelChatMessage, ChatMessageContent, ChatModel,
     McpClient, McpToolAdapter, OpenAIChatModel, Runnable, Tool, parse_model_output
 };
 use serde_json::Value;
 
-/// McpAgent 是一个基于 MCP 服务的智能体实现
-/// 它能够连接 MCP 服务器，处理用户输入，调用工具，并生成响应
+/// McpAgent is an intelligent agent implementation based on MCP services
+/// It can connect to MCP servers, process user inputs, call tools, and generate responses
 pub struct McpAgent {
     client: Arc<dyn McpClient>,
     tools: Vec<Box<dyn Tool + Send + Sync>>,
@@ -20,29 +20,29 @@ pub struct McpAgent {
 }
 
 impl McpAgent {
-    /// 创建一个新的 McpAgent 实例
+    /// Create a new McpAgent instance
     pub fn new(client: Arc<dyn McpClient>, system_prompt: String) -> Self {
         Self {
             client,
             tools: Vec::new(),
             system_prompt,
-            openai_model: None, // 默认不设置OpenAI模型
-            memory: None, // 默认不设置记忆模块
+            openai_model: None, // Default to not setting OpenAI model
+            memory: None, // Default to not setting memory module
         }
     }
     
-    /// 创建一个新的 McpAgent 实例，并指定 OpenAIChatModel
+    /// Create a new McpAgent instance with specified OpenAIChatModel
     pub fn with_openai_model(client: Arc<dyn McpClient>, system_prompt: String, openai_model: OpenAIChatModel) -> Self {
         Self {
             client,
             tools: Vec::new(),
             system_prompt,
             openai_model: Some(openai_model),
-            memory: None, // 默认不设置记忆模块
+            memory: None, // Default to not setting memory module
         }
     }
     
-    /// 创建一个新的 McpAgent 实例，并指定记忆模块
+    /// Create a new McpAgent instance with specified memory module
     pub fn with_memory(client: Arc<dyn McpClient>, system_prompt: String, memory: Box<dyn BaseMemory>) -> Self {
         Self {
             client,
@@ -52,8 +52,8 @@ impl McpAgent {
             memory: Some(memory),
         }
     }
-    
-    /// 创建一个新的 McpAgent 实例，并指定 OpenAIChatModel 和记忆模块
+
+    /// Create a new McpAgent instance with specified OpenAIChatModel and memory module
     pub fn with_openai_model_and_memory(client: Arc<dyn McpClient>, system_prompt: String, openai_model: OpenAIChatModel, memory: Box<dyn BaseMemory>) -> Self {
         Self {
             client,
@@ -63,32 +63,32 @@ impl McpAgent {
             memory: Some(memory),
         }
     }
-
-    /// 获取记忆模块的引用
+    
+    /// Get a reference to the memory module
     pub fn get_memory(&self) -> Option<&Box<dyn BaseMemory>> {
         self.memory.as_ref()
     }
 
-    /// 向 Agent 添加一个工具
+    /// Add a tool to the Agent
     pub fn add_tool(&mut self, tool: Box<dyn Tool + Send + Sync>) {
         self.tools.push(tool);
     }
     
-    /// 自动从 MCP 客户端获取工具并添加到 Agent
-    /// 这个方法会从 MCP 客户端获取所有可用工具，并将它们包装为 McpToolAdapter 后添加到 Agent
-    /// 本地工具的注册与添加由调用者处理
+    /// Automatically get tools from MCP client and add them to the Agent
+    /// This method gets all available tools from the MCP client and wraps them as McpToolAdapter before adding to the Agent
+    /// Local tool registration and addition are handled by the caller
     pub async fn auto_add_tools(&mut self) -> Result<(), anyhow::Error> {
         use crate::McpToolAdapter;
         
-        // 从 MCP 客户端获取工具列表
+        // Get tool list from MCP client
         let tools = self.client.get_tools().await?;
 
-        // 打印获取到的工具信息
+        // Print information about the obtained tools
         for tool in &tools {
             info!("MCP Client Get Tool: {} - {}", tool.name, tool.description);
         }
         
-        // 将每个工具包装为 McpToolAdapter 并添加到 Agent
+        // Wrap each tool as McpToolAdapter and add to the Agent
         for tool in tools {
             let tool_adapter = McpToolAdapter::new(
                 self.client.clone(),
@@ -103,24 +103,24 @@ impl McpAgent {
 
 impl Agent for McpAgent {
     fn tools(&self) -> Vec<Box<dyn Tool + Send + Sync>> {
-        // 返回工具列表的克隆版本
-        // 为了解决 Box<dyn Tool> 不能直接克隆的问题，我们创建新的工具适配器实例
+        // Return a cloned version of the tool list
+        // To solve the problem that Box<dyn Tool> cannot be directly cloned, we create new tool adapter instances
         let mut cloned_tools: Vec<Box<dyn Tool + Send + Sync>> = Vec::new();
 
-        // 由于 McpToolAdapter 可以通过 client 和 McpTool 重新创建，
-        // 我们遍历现有工具并为每个工具创建新的适配器实例
+        // Since McpToolAdapter can be recreated through client and McpTool,
+        // we iterate through existing tools and create new adapter instances for each tool
         for tool in &self.tools {
-            // 检查工具是否为 McpToolAdapter 类型
+            // Check if the tool is of type McpToolAdapter
             if let Some(mcp_tool_adapter) = tool.as_any().downcast_ref::<McpToolAdapter>() {
-                // 重新创建 McpToolAdapter 实例
+                // Recreate McpToolAdapter instance
                 let cloned_adapter = McpToolAdapter::new(
                     mcp_tool_adapter.get_client(),
                     mcp_tool_adapter.get_mcp_tool(),
                 );
                 cloned_tools.push(Box::new(cloned_adapter));
             } else {
-                // 对于其他类型的工具，我们暂时跳过或需要实现其他克隆机制
-                // 这里可以添加日志或错误处理
+                // For other types of tools, we skip or need to implement other cloning mechanisms
+                // Here we can add logs or error handling
                 info!(
                     "Warning: Unable to clone non-McpToolAdapter type tool: {}",
                     tool.name()
@@ -138,33 +138,33 @@ impl Agent for McpAgent {
         Box<dyn std::future::Future<Output = Result<String, anyhow::Error>> + Send + '_>,
     > {
         Box::pin(async move {
-            // 在实际应用中，这里应该有一个机制来查找和调用工具
-            // 由于我们不能克隆工具列表，这里简化实现
+            // In practical applications, there should be a mechanism here to find and call tools
+            // Since we cannot clone the tool list, we simplify the implementation here
             Err(anyhow!("Tool execution functionality is not implemented yet"))
         })
     }
 
     fn clone_agent(&self) -> Box<dyn Agent> {
-        // 创建一个新的 McpAgent 实例，复制基本字段，但不复制工具（简化实现）
+        // Create a new McpAgent instance, copy basic fields, but do not copy tools (simplified implementation)
         let new_agent = McpAgent::new(
             self.client.clone(),
             self.system_prompt.clone(),
         );
 
-        // 注意：这里我们不复制工具，因为 Box<dyn Tool> 不能直接克隆
+        // Note: We do not copy tools here because Box<dyn Tool> cannot be directly cloned
         Box::new(new_agent)
     }
 }
 
 impl Clone for McpAgent {
     fn clone(&self) -> Self {
-        // 创建一个新的 McpAgent 实例，但不复制工具列表（简化实现）
+        // Create a new McpAgent instance, but do not copy the tool list (simplified implementation)
         Self {
             client: Arc::clone(&self.client),
-            tools: Vec::new(), // 不复制工具，因为 Box<dyn Tool> 不能直接克隆
+            tools: Vec::new(), // Do not copy tools because Box<dyn Tool> cannot be directly cloned
             system_prompt: self.system_prompt.clone(),
-            openai_model: self.openai_model.clone(), // 克隆OpenAI模型实例
-            memory: self.memory.clone(), // 克隆记忆模块
+            openai_model: self.openai_model.clone(), // Clone OpenAI model instance
+            memory: self.memory.clone(), // Clone memory module
         }
     }
 }
@@ -174,7 +174,7 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
         &self,
         input: std::collections::HashMap<String, String>,
     ) -> Pin<Box<dyn std::future::Future<Output = Result<AgentOutput, anyhow::Error>> + Send>> {
-        // 提前捕获系统提示词
+        // Capture system prompt in advance
         let system_prompt = self.system_prompt.clone();
         let input_text = input
             .get("input")
@@ -184,7 +184,7 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
             .trim()
             .to_string();
 
-        // 提前捕获工具描述，避免在async move中使用self
+        // Capture tool descriptions in advance to avoid using self in async move
         let tool_descriptions: String = if !self.tools.is_empty() {
             let mut descriptions = String::new();
             for tool in &self.tools {
@@ -195,10 +195,10 @@ impl Runnable<std::collections::HashMap<String, String>, AgentOutput> for McpAge
             String::new()
         };
 
-        // 提前捕获记忆模块，避免在async move中使用self
+        // Capture memory module in advance to avoid using self in async move
         let memory_clone = self.memory.clone();
 
-        // 构建增强的系统提示词，采用ReAct框架格式
+        // Build enhanced system prompt using ReAct framework format
         let enhanced_system_prompt = if !tool_descriptions.is_empty() {
             format!("{}
 You are an AI assistant that follows the ReAct (Reasoning and Acting) framework. 
@@ -213,15 +213,15 @@ Available tools:\n{}\n\nWhen you need to use a tool, please respond in the follo
             system_prompt
         };
 
-        // 提前捕获OpenAI模型实例，避免在async move中使用self
+        // Capture OpenAI model instance in advance to avoid using self in async move
         let openai_model_clone = self.openai_model.clone();
 
         Box::pin(async move {
-            // 检查输入是否为空
+            // Check if input is empty
             if input_text.is_empty() {
                 let mut return_values = std::collections::HashMap::new();
                 return_values.insert("answer".to_string(), "Please enter valid content".to_string());
-                // 从OpenAI模型获取模型名称，如果没有则使用默认值
+                // Get model name from OpenAI model, use default value if not available
                 let model_name = if let Some(ref openai_model) = openai_model_clone {
                     openai_model.model_name().map(|s| s.to_string()).unwrap_or("unknown".to_string())
                 } else {
@@ -231,33 +231,75 @@ Available tools:\n{}\n\nWhen you need to use a tool, please respond in the follo
                 return Ok(AgentOutput::Finish(AgentFinish { return_values }));
             }
 
-            // 使用传入的OpenAI模型实例或创建新的实例
+            // Use the passed OpenAI model instance or create a new instance
             let model = if let Some(ref openai_model) = openai_model_clone {
-                // 使用传入的OpenAI模型实例
+                // Use the passed OpenAI model instance
                 openai_model
             } else {
-                // 如果没有提供OpenAI模型实例，则返回错误
+                // If no OpenAI model instance is provided, return an error
                 let mut return_values = std::collections::HashMap::new();
                 return_values.insert("answer".to_string(), "No OpenAI model provided".to_string());
                 return_values.insert("model".to_string(), "unknown".to_string());
                 return Ok(AgentOutput::Finish(AgentFinish { return_values }));
             };
 
-            // 构建消息列表
+            // Build message list
             let mut messages = Vec::new();
 
-            // 添加系统消息
-            messages.push(ChatMessage::System(ChatMessageContent {
-                content: enhanced_system_prompt,
+            // Get summary content and append to system prompt
+            let enhanced_system_prompt_with_summary = {
+                let mut enhanced_prompt = enhanced_system_prompt;
+                if let Some(memory) = &memory_clone {
+                    // Try to get summary content from memory module
+                    // Here we use downcast_ref to check if it's CompositeMemory type
+                    if let Some(composite_memory) = memory.as_any().downcast_ref::<crate::memory::composite_memory::CompositeMemory>() {
+                        // If it's CompositeMemory, call get_summary method to get summary
+                        match composite_memory.get_summary().await {
+                            Ok(Some(summary)) => {
+                                // Append summary content to system prompt
+                                enhanced_prompt = format!("{}\n\nPrevious conversation summary: {}", enhanced_prompt, summary);
+                                log::info!("Summary appended to system prompt");
+                            },
+                            Ok(None) => {
+                                log::info!("No summary content found");
+                            },
+                            Err(e) => {
+                                log::warn!("Error getting summary: {}", e);
+                            }
+                        }
+                    } else {
+                        // If not CompositeMemory, try to get summary from memory variables
+                        match memory.load_memory_variables(&std::collections::HashMap::new()).await {
+                            Ok(memories) => {
+                                if let Some(summary) = memories.get("summary") {
+                                    if let Some(summary_str) = summary.as_str() {
+                                        // Append summary content to system prompt
+                                        enhanced_prompt = format!("{}\n\nPrevious conversation summary: {}", enhanced_prompt, summary_str);
+                                        log::info!("Summary retrieved from memory variables and appended to system prompt");
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                log::warn!("Error getting summary from memory variables: {}", e);
+                            }
+                        }
+                    }
+                }
+                enhanced_prompt
+            };
+
+            // Add system message
+            messages.push(ModelChatMessage::System(ChatMessageContent {
+                content: enhanced_system_prompt_with_summary,
                 name: None,
                 additional_kwargs: std::collections::HashMap::new(),
             }));
 
-            // 如果有记忆模块，加载记忆变量并添加到消息列表中
+            // If there is a memory module, load memory variables and add them to the message list
             if let Some(memory) = &memory_clone {
                 match memory.load_memory_variables(&std::collections::HashMap::new()).await {
                     Ok(memories) => {
-                        info!("加载记忆变量: {:?}", memories);
+                        info!("Loaded memory variables: {:?}", memories);
                         if let Some(chat_history) = memories.get("chat_history") {
                             if let serde_json::Value::Array(messages_array) = chat_history {
                                 for message in messages_array {
@@ -265,43 +307,53 @@ Available tools:\n{}\n\nWhen you need to use a tool, please respond in the follo
                                         let role = msg_obj.get("role").and_then(|v| v.as_str()).unwrap_or("unknown");
                                         let content = msg_obj.get("content").and_then(|v| v.as_str()).unwrap_or("");
                                         
-                                        // 添加调试日志
-                                        log::info!("加载消息: role={}, content={}", role, content);
+                                        // Skip empty content messages
+                                        if content.trim().is_empty() {
+                                            continue;
+                                        }
+                                        
+                                        // Skip assistant messages containing complete history messages
+                                        if role == "assistant" && content.contains("user:") && content.contains("assistant:") {
+                                            continue;
+                                        }
+                                        
+                                        // Add debug log
+                                        // info!("Loaded message: role={}, content={}", role, content);
                                         
                                         match role {
-                                            "human" => {
-                                                // 添加调试日志
-                                                log::info!("加载人类消息: content={}", content);
-                                                messages.push(ChatMessage::Human(ChatMessageContent {
+                                            "human" | "user" => {
+                                                // Add debug log
+                                                log::info!("Loaded human message: content={}", content);
+                                                messages.push(ModelChatMessage::Human(ChatMessageContent {
                                                     content: content.to_string(),
                                                     name: None,
                                                     additional_kwargs: std::collections::HashMap::new(),
                                                 }));
                                             },
-                                            "ai" => {
-                                                // 添加调试日志
-                                                log::info!("加载AI消息: content={}", content);
-                                                messages.push(ChatMessage::AIMessage(ChatMessageContent {
+                                            "ai" | "assistant" => {
+                                                // Add debug log
+                                                log::info!("Loaded AI message: content={}", content);
+                                                messages.push(ModelChatMessage::AIMessage(ChatMessageContent {
                                                     content: content.to_string(),
                                                     name: None,
                                                     additional_kwargs: std::collections::HashMap::new(),
                                                 }));
                                             },
                                             "tool" => {
-                                                // 处理工具消息
+                                                // Handle tool messages
                                                 let content_str = content.to_string();
-                                                // 添加调试日志
-                                                log::info!("加载工具消息: content={}", content_str);
-                                                messages.push(ChatMessage::ToolMessage(ChatMessageContent {
+                                                // Add debug log
+                                                log::info!("Loaded tool message: content={}", content_str);
+                                                messages.push(ModelChatMessage::ToolMessage(ChatMessageContent {
                                                     content: content_str,
                                                     name: None,
                                                     additional_kwargs: std::collections::HashMap::new(),
                                                 }));
                                             },
                                             _ => {
-                                                // 添加调试日志
-                                                log::info!("加载未知角色消息: role={}, content={}", role, content);
-                                                // 忽略未知角色的消息
+                                                // Add debug log
+                                                log::info!("Loaded unknown role message: role={}, content={}", role, content);
+                                                // Ignore messages with unknown roles
                                             }
                                         }
                                     }
@@ -310,76 +362,104 @@ Available tools:\n{}\n\nWhen you need to use a tool, please respond in the follo
                         }
                     },
                     Err(e) => {
-                        // 如果加载记忆失败，记录错误但继续执行
+                        // If loading memory fails, log the error but continue execution
                         log::warn!("Failed to load memory variables: {}", e);
                     }
                 }
             }
 
-            // 添加当前用户消息
-            messages.push(ChatMessage::Human(ChatMessageContent {
+            // Add current user message
+            messages.push(ModelChatMessage::Human(ChatMessageContent {
                 content: input_text.clone(),
                 name: None,
                 additional_kwargs: std::collections::HashMap::new(),
             }));
-            info!("添加当前用户消息: role=user, content={}", input_text);
+            // info!("Added current user message: role=user, content={}", input_text);
             
-            // 添加调试日志，显示所有消息
-            log::info!("准备发送给模型的消息:");
+            // Add debug log, showing all messages
+            log::info!("Messages to be sent to model:");
             for (i, msg) in messages.iter().enumerate() {
                 match msg {
-                    ChatMessage::System(content) => {
+                    ModelChatMessage::System(content) => {
                         log::info!("  {}. role=system, content={}", i+1, content.content);
                     },
-                    ChatMessage::Human(content) => {
+                    ModelChatMessage::Human(content) => {
                         log::info!("  {}. role=user, content={}", i+1, content.content);
                     },
-                    ChatMessage::AIMessage(content) => {
+                    ModelChatMessage::AIMessage(content) => {
                         log::info!("  {}. role=assistant, content={}", i+1, content.content);
                     },
-                    ChatMessage::ToolMessage(content) => {
+                    ModelChatMessage::ToolMessage(content) => {
                         log::info!("  {}. role=tool, content={}", i+1, content.content);
                     },
                 }
             }
 
-            // 调用语言模型
+            // Call the language model
             let result = model.invoke(messages).await;
 
             match result {
                 Ok(completion) => {
-                    // 解析模型输出
+                    // Parse model output
                     let content = match completion.message {
-                        ChatMessage::AIMessage(content) => content.content,
+                        ModelChatMessage::AIMessage(content) => content.content,
                         _ => { format!("{},{:?}", "Non-AI message received", completion.message) }
                     };
 
-                    // 从OpenAI模型获取模型名称，如果没有则使用默认值
+                    // Get model name from OpenAI model, use default value if not available
                     let model_name = model.model_name().map(|s| s.to_string()).unwrap_or("unknown".to_string());
 
-                    // 如果有记忆模块，保存当前对话到记忆中
+                    // If there is a memory module, save the current conversation to memory
                     if let Some(memory) = &memory_clone {
                         let mut inputs = std::collections::HashMap::new();
                         inputs.insert("input".to_string(), serde_json::Value::String(input_text.clone()));
                         
+                        // Preprocess content, if it's JSON string format, extract the content field
+                        let processed_content = if content.starts_with('"') && content.ends_with('"') {
+                            // Try to parse as JSON string
+                            match serde_json::from_str::<serde_json::Value>(&content) {
+                                Ok(serde_json::Value::String(s)) => s,
+                                _ => content.clone(),
+                            }
+                        } else if content.starts_with('{') && content.ends_with('}') {
+                            // Try to parse as JSON object
+                            match serde_json::from_str::<serde_json::Value>(&content) {
+                                Ok(json_obj) => {
+                                    // If it's a JSON object, try to extract the content field
+                                    if let Some(content_value) = json_obj.get("content") {
+                                        if let Some(content_str) = content_value.as_str() {
+                                            content_str.to_string()
+                                        } else {
+                                            content.clone()
+                                        }
+                                    } else {
+                                        content.clone()
+                                    }
+                                },
+                                _ => content.clone(),
+                            }
+                        } else {
+                            content.clone()
+                        };
+                        
                         let mut outputs = std::collections::HashMap::new();
-                        outputs.insert("output".to_string(), serde_json::Value::String(content.clone()));
+                        outputs.insert("output".to_string(), serde_json::Value::String(processed_content));
                         
                         if let Err(e) = memory.save_context(&inputs, &outputs).await {
                             log::warn!("Failed to save context to memory: {}", e);
                         }
                     }
 
-                    // 解析模型输出，判断是否需要调用工具
-                    // 这里应该正确解析模型输出的JSON格式
+                    // Parse model output, determine if tool call is needed
+                    // Here should correctly parse the JSON format of model output
                     if let Ok(parsed_output) = parse_model_output(&content) {
                         match parsed_output {
                             AgentOutput::Action(action) => {
-                                // 直接返回模型解析出的Action
+                                // Directly return the Action parsed by the model
                                 return Ok(AgentOutput::Action(action));
                             }
                             AgentOutput::Finish(_) => {
-                                // 直接返回回答
+                                // Directly return the answer
                                 let mut return_values = std::collections::HashMap::new();
                                 return_values.insert("answer".to_string(), content.clone());
                                 return_values.insert("model".to_string(), model_name);
@@ -387,22 +467,22 @@ Available tools:\n{}\n\nWhen you need to use a tool, please respond in the follo
                             }
                         }
                     } else {
-                        // 如果解析失败，尝试提取工具调用信息
-                        // 检查是否包含工具调用关键词
+                        // If parsing fails, try to extract tool call information
+                        // Check if tool call keywords are included
                         if content.contains("call_tool") {
-                            // 尝试从内容中提取JSON格式的工具调用
-                            // 这里应该更智能地解析工具调用，而不是使用默认工具
+                            // Try to extract JSON format tool call from content
+                            // Here should more intelligently parse tool calls instead of using default tools
                             if let Ok(agent_action) = parse_tool_call_from_content(&content) {
                                 Ok(AgentOutput::Action(agent_action))
                             } else {
-                                // 如果无法解析工具调用，直接返回回答
+                                // If unable to parse tool call, directly return the answer
                                 let mut return_values = std::collections::HashMap::new();
                                 return_values.insert("answer".to_string(), content.clone());
                                 return_values.insert("model".to_string(), model_name);
                                 Ok(AgentOutput::Finish(AgentFinish { return_values }))
                             }
                         } else {
-                            // 直接返回回答
+                            // Directly return the answer
                             let mut return_values = std::collections::HashMap::new();
                             return_values.insert("answer".to_string(), content.clone());
                             return_values.insert("model".to_string(), model_name);
@@ -411,13 +491,27 @@ Available tools:\n{}\n\nWhen you need to use a tool, please respond in the follo
                     }
                 }
                 Err(e) => {
-                    // 出错时返回错误信息
-                    // 从OpenAI模型获取模型名称，如果没有则使用默认值
+                    // Return error message when an error occurs
+                    // Get model name from OpenAI model, use default value if not available
                     let model_name = if let Some(ref model) = openai_model_clone {
                         model.model_name().map(|s| s.to_string()).unwrap_or("unknown".to_string())
                     } else {
                         "unknown".to_string()
                     };
+                    
+                    // Even if model call fails, save user message to memory
+                    if let Some(memory) = &memory_clone {
+                        let mut inputs = std::collections::HashMap::new();
+                        inputs.insert("input".to_string(), serde_json::Value::String(input_text.clone()));
+                        
+                        let mut outputs = std::collections::HashMap::new();
+                        outputs.insert("output".to_string(), serde_json::Value::String(format!("Model invocation failed: {}", e)));
+                        
+                        if let Err(e) = memory.save_context(&inputs, &outputs).await {
+                            log::warn!("Failed to save context to memory: {}", e);
+                        }
+                    }
+                    
                     let mut return_values = std::collections::HashMap::new();
                     return_values.insert("answer".to_string(), format!("Model invocation failed: {}", e));
                     return_values.insert("model".to_string(), model_name);
@@ -435,16 +529,16 @@ Available tools:\n{}\n\nWhen you need to use a tool, please respond in the follo
     }
 }
 
-/// 从内容中提取JSON对象字符串
+/// Extract JSON object string from content
 fn extract_json_object(content: &str) -> Option<String> {
-    // 查找第一个 '{' 和最后一个 '}'
+    // Find the first '{' and the last '}'
     if let Some(start) = content.find('{') {
         if let Some(end) = content.rfind('}') {
             if end > start {
-                // 提取可能的JSON对象
+                // Extract possible JSON object
                 let json_str = &content[start..=end];
                 
-                // 验证是否是有效的JSON对象
+                // Verify if it's a valid JSON object
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
                     if value.is_object() {
                         return Some(json_str.to_string());
@@ -456,30 +550,30 @@ fn extract_json_object(content: &str) -> Option<String> {
     None
 }
 
-/// 从内容中解析工具调用
+/// Parse tool call from content
 fn parse_tool_call_from_content(content: &str) -> Result<AgentAction, anyhow::Error> {
-    // 尝试提取JSON对象
+    // Try to extract JSON object
     if let Some(json_str) = extract_json_object(content) {
-        // 解析JSON
+        // Parse JSON
         let value: Value = serde_json::from_str(&json_str)?;
         
-        // 检查是否有call_tool字段
+        // Check if there's a call_tool field
         if let Some(call_tool) = value.get("call_tool").and_then(|v| v.as_object()) {
-            // 提取工具名称
+            // Extract tool name
             let tool_name = call_tool
                 .get("name")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?
                 .to_string();
             
-            // 提取参数并转换为字符串
+            // Extract parameters and convert to string
             let tool_input = call_tool
                 .get("parameters")
                 .cloned()
                 .unwrap_or(Value::Object(serde_json::Map::new()))
                 .to_string();
             
-            // 创建AgentAction
+            // Create AgentAction
             let action = AgentAction {
                 tool: tool_name,
                 tool_input,
@@ -491,6 +585,6 @@ fn parse_tool_call_from_content(content: &str) -> Result<AgentAction, anyhow::Er
         }
     }
     
-    // 如果无法解析，返回错误
+    // If unable to parse, return error
     Err(anyhow::anyhow!("Failed to parse tool call from content"))
 }

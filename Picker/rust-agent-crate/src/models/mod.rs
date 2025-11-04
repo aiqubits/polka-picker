@@ -1,9 +1,9 @@
-// 模型模块定义
+// Model module definition
 mod chat;
 mod message;
 mod openai;
 
-// 重新导出模块内容
+// Re-export module content
 pub use chat::{ChatModel, ChatCompletion};
 pub use message::{ChatMessage, ChatMessageContent, TokenUsage};
 pub use openai::OpenAIChatModel;

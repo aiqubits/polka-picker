@@ -1,5 +1,13 @@
-// 记忆模块定义
-mod base;
+// Memory system module
+pub mod base;
+pub mod message_history;
+pub mod summary;
+pub mod utils;
+pub mod composite_memory;
 
-// 重新导出模块内容
-pub use base::{BaseMemory, SimpleMemory};
+// Export main types and traits
+pub use base::{BaseMemory, SimpleMemory, MemoryVariables};
+pub use message_history::{MessageHistoryMemory, ChatMessage, ChatMessageRecord};
+pub use summary::{SummaryMemory, SummaryData};
+pub use utils::*;
+pub use composite_memory::{CompositeMemory, CompositeMemoryConfig};

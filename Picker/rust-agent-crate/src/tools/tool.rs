@@ -1,28 +1,28 @@
-// 工具接口和实现
+// Tool interface and implementation
 use anyhow::Error;
 use std::pin::Pin;
 
-// 最小化工具接口（与langchain-core对齐）
+// Minimal tool interface (aligned with langchain-core)
 pub trait Tool: Send + Sync {
-    // 工具基本信息
+    // Basic tool information
     fn name(&self) -> &str;
     
     fn description(&self) -> &str;
     
-    // 核心执行方法
+    // Core execution method
     fn invoke(&self, input: &str) -> Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send + '_>>;
     
-    // 添加 as_any 方法以支持运行时类型检查
+    // Add as_any method to support runtime type checking
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-// 工具包接口
+// Toolkit interface
 pub trait Toolkit {
-    // 获取所有工具
+    // Get all tools
     fn tools(&self) -> Vec<Box<dyn Tool>>;
 }
 
-// 示例工具实现 - 用于演示目的
+// Example tool implementation - for demonstration purposes
 pub struct ExampleTool {
     name: String,
     description: String,
@@ -51,17 +51,17 @@ impl Tool for ExampleTool {
         let name = self.name.clone();
         
         Box::pin(async move {
-            Ok(format!("工具 {} 收到输入: {}", name, input_str))
+            Ok(format!("Tool {} received input: {}", name, input_str))
         })
     }
     
-    // 实现 as_any 方法以支持运行时类型检查
+    // Implement as_any method to support runtime type checking
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
-// 示例工具包实现
+// Example toolkit implementation
 pub struct ExampleToolkit {
     tools: Vec<Box<dyn Tool>>,
 }
@@ -81,20 +81,20 @@ impl ExampleToolkit {
 
 impl Toolkit for ExampleToolkit {
     fn tools(&self) -> Vec<Box<dyn Tool>> {
-        // 由于Box<dyn Tool>无法直接克隆，返回空向量作为最小化实现
+        // Since Box<dyn Tool> cannot be directly cloned, return an empty vector as minimal implementation
         Vec::new()
     }
 }
 
-// 为ExampleToolkit实现Clone trait
+// Implement Clone trait for ExampleToolkit
 impl Clone for ExampleToolkit {
     fn clone(&self) -> Self {
         let mut toolkit = ExampleToolkit::new();
-        // 由于Tool trait没有要求Clone，我们通过创建新实例来实现克隆
+        // Since Tool trait doesn't require Clone, we implement cloning by creating new instances
         for tool in &self.tools {
             let name = tool.name();
             let description = tool.description();
-            // 创建一个新的ExampleTool作为克隆
+            // Create a new ExampleTool as a clone
             let new_tool = Box::new(ExampleTool::new(name.to_string(), description.to_string()));
             toolkit.add_tool(new_tool);
         }

@@ -1,7 +1,6 @@
-// MCP客户端接口定义
+// MCP client interface definition
 use anyhow::Error;
 use log::{debug, info, warn};
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::future::Future;
@@ -12,42 +11,42 @@ use uuid::Uuid;
 use crate::mcp::JSONRPCRequest;
 use crate::mcp::JSONRPCResponse;
 
-// MCP工具结构体
+// MCP tool structure
 #[derive(Debug,Clone)]
 pub struct McpTool {
     pub name: String,
     pub description: String,
-    // 其他工具相关字段
+    // Other tool-related fields
 }
 
-// 简单的MCP客户端实现，修改 SimpleMcpClient 结构体，添加工具处理器字段
+// Simple MCP client implementation, modify SimpleMcpClient structure, add tool handler field
 #[derive(Clone)]
 pub struct SimpleMcpClient {
     pub url: String,
     pub available_tools: Vec<McpTool>,
-    // 使用Arc包装工具处理器，使其支持克隆
+    // Use Arc to wrap tool handlers to support cloning
     pub tool_handlers: HashMap<String, Arc<dyn Fn(HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<Value, Error>> + Send>> + Send + Sync>>,
-    // 连接状态标志，表示是否已成功连接到MCP服务器
+    // Connection status flag, indicates whether successfully connected to MCP server
     pub is_mcp_server_connected: Arc<Mutex<bool>>,
 }
 
-// 实现 SimpleMcpClient 结构体的方法
+// Implement methods for SimpleMcpClient structure
 impl SimpleMcpClient {
     pub fn new(url: String) -> Self {
         Self {
             url,
             available_tools: Vec::new(),
             tool_handlers: HashMap::new(),
-            is_mcp_server_connected: Arc::new(Mutex::new(false)), // 初始状态为未连接
+            is_mcp_server_connected: Arc::new(Mutex::new(false)), // Initial state is disconnected
         }
     }
     
-    // 添加自定义工具方法
+    // Add custom tool method
     pub fn add_tool(&mut self, tool: McpTool) {
         self.available_tools.push(tool);
     }
     
-    // 注册工具处理器方法
+    // Register tool handler method
     pub fn register_tool_handler<F, Fut>(&mut self, tool_name: String, handler: F)
     where
         F: Fn(HashMap<String, Value>) -> Fut + Send + Sync + 'static,
@@ -59,17 +58,17 @@ impl SimpleMcpClient {
         }));
     }
     
-    // 批量添加工具方法
+    // Batch add tools method
     pub fn add_tools(&mut self, tools: Vec<McpTool>) {
         self.available_tools.extend(tools);
     }
     
-    // 清空工具列表方法
+    // Clear tool list method
     pub fn clear_tools(&mut self) {
         self.available_tools.clear();
     }
     
-    // 设置服务器连接状态
+    // Set server connection status
     pub fn set_server_connected(&self, connected: bool) {
         if let Ok(mut conn_status) = self.is_mcp_server_connected.lock() {
             *conn_status = connected;
@@ -81,15 +80,15 @@ impl SimpleMcpClient {
         }
     }
     
-    // 获取服务器连接状态
+    // Get server connection status
     pub fn is_server_connected(&self) -> bool {
         *self.is_mcp_server_connected.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
-// 为 SimpleMcpClient 实现 McpClient trait
+// Implement McpClient trait for SimpleMcpClient
 impl McpClient for SimpleMcpClient {
-    // 连接到MCP服务器
+    // Connect to MCP server
     fn connect(&mut self, url: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Error>> + Send + '_>> {
         let url = url.to_string();
         Box::pin(async move {
@@ -98,13 +97,13 @@ impl McpClient for SimpleMcpClient {
         })
     }
     
-    // 获取可用工具列表
+    // Get available tool list
     fn get_tools(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<McpTool>, Error>> + Send + '_>> {
         let url = self.url.clone();
         let local_tools = self.available_tools.clone();
         let is_connected = self.is_mcp_server_connected.clone();
         Box::pin(async move {
-            // 首先检查连接状态标志，如果未连接则直接返回本地工具列表
+            // First check connection status flag, return local tool list directly if not connected
             let connected = if let Ok(conn) = is_connected.lock() {
                 *conn
             } else {
@@ -117,7 +116,7 @@ impl McpClient for SimpleMcpClient {
             }
             
             if !url.is_empty() {
-                // 构造JSON-RPC请求
+                // Construct JSON-RPC request
                 let request = JSONRPCRequest {
                     jsonrpc: "2.0".to_string(),
                     id: Some(Value::String(Uuid::new_v4().to_string())),
@@ -125,7 +124,7 @@ impl McpClient for SimpleMcpClient {
                     params: None,
                 };
 
-                // 发送HTTP POST请求
+                // Send HTTP POST request
                 let client = reqwest::Client::new();
                 let response = client
                     .post(&format!("{}/rpc", url))
@@ -133,52 +132,52 @@ impl McpClient for SimpleMcpClient {
                     .send()
                     .await;
 
-                // 检查请求是否成功发送
+                // Check if request was sent successfully
                 match response {
                     Ok(response) => {
-                        // 检查HTTP状态码
+                        // Check HTTP status code
                         if !response.status().is_success() {
                             let status = response.status();
                             let body = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
                             warn!("MCP server returned HTTP error {}: {}. Response body: {}", status.as_u16(), status.canonical_reason().unwrap_or("Unknown error"), body);
-                            // 当服务器返回错误时，返回本地工具列表
+                            // Return local tool list when server returns error
                             return Ok(local_tools);
                         }
 
-                        // 获取响应文本用于调试
+                        // Get response text for debugging
                         let response_text = response.text().await
                             .map_err(|e| Error::msg(format!("Failed to read response body: {}", e)))?;
                         
-                        // 检查响应是否为空
+                        // Check if response is empty
                         if response_text.trim().is_empty() {
                             warn!("MCP server returned empty response");
-                            // 当服务器返回空响应时，返回本地工具列表
+                            // Return local tool list when server returns empty response
                             return Ok(local_tools);
                         }
 
-                        // 尝试解析JSON
+                        // Try to parse JSON
                         let rpc_response: JSONRPCResponse = serde_json::from_str(&response_text)
                             .map_err(|e| {
                                 warn!("Failed to parse response as JSON: {}. Response content: {}", e, response_text);
-                                // 当解析JSON失败时，返回本地工具列表
+                                // Return local tool list when JSON parsing fails
                                 Error::msg(format!("Failed to parse response as JSON: {}. Response content: {}", e, response_text))
                             })?;
                         
-                        // 检查是否有错误
+                        // Check for errors
                         if let Some(error) = rpc_response.error {
                             warn!("JSON-RPC error: {} (code: {})", error.message, error.code);
-                            // 当JSON-RPC返回错误时，返回本地工具列表
+                            // Return local tool list when JSON-RPC returns error
                             return Ok(local_tools);
                         }
                         
-                        // 解析工具列表
+                        // Parse tool list
                         if let Some(result) = rpc_response.result {
                             debug!("Server response result: {:?}", result);
                             if let Some(tools_value) = result.get("tools") {
                                 debug!("Tools value: {:?}", tools_value);
                                 if let Ok(tools_array) = serde_json::from_value::<Vec<serde_json::Value>>(tools_value.clone()) {
                                     let mut tools = Vec::new();
-                                    // 首先把本地工具加入到tools中
+                                    // First add local tools to tools
                                     tools.extend(local_tools);
                                     for tool_value in tools_array {
                                         debug!("Processing tool value: {:?}", tool_value);
@@ -205,39 +204,39 @@ impl McpClient for SimpleMcpClient {
                             warn!("No result in JSON-RPC response");
                         }
                         
-                        // 如果解析失败，返回本地工具列表
+                        // Return local tool list if parsing fails
                         warn!("Failed to parse tools from server response");
                         Ok(local_tools)
                     }
                     Err(e) => {
-                        // 当无法连接到服务器时，返回本地工具列表
+                        // Return local tool list when unable to connect to server
                         warn!("Failed to send request to MCP server: {}", e);
                         Ok(local_tools)
                     }
                 }
             } else {
-                // 如果没有设置URL，返回本地工具列表
+                // Return local tool list if no URL is set
                 Ok(local_tools)
             }
         })
     }
     
-    // 调用指定工具
+    // Call specified tool
     fn call_tool(&self, tool_name: &str, params: HashMap<String, Value>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, Error>> + Send + '_>> {
         let url = self.url.clone();
         let tool_name = tool_name.to_string();
         let params = params.clone();
         let handler_opt = self.tool_handlers.get(&tool_name).cloned();
         Box::pin(async move {
-            // 检查是否有自定义的工具处理器
+            // Check if there is a custom tool handler
             if let Some(handler) = handler_opt {
-                // 如果有自定义处理器，调用它
+                // If there is a custom handler, call it
                 info!("Calling tool {} with params {:?}", tool_name, params);
                 handler(params.clone()).await
             } else {
-                // 否则通过HTTP发送JSON-RPC请求
+                // Otherwise send JSON-RPC request via HTTP
                 if !url.is_empty() {
-                    // 构造JSON-RPC请求
+                    // Construct JSON-RPC request
                     let request = JSONRPCRequest {
                         jsonrpc: "2.0".to_string(),
                         id: Some(Value::String(Uuid::new_v4().to_string())),
@@ -248,7 +247,7 @@ impl McpClient for SimpleMcpClient {
                         })),
                     };
 
-                    // 发送HTTP POST请求
+                    // Send HTTP POST request
                     let client = reqwest::Client::new();
                     let response = client
                         .post(&format!("{}/rpc", url))
@@ -256,21 +255,21 @@ impl McpClient for SimpleMcpClient {
                         .send()
                         .await?;
 
-                    // 解析响应
+                    // Parse response
                     let rpc_response: JSONRPCResponse = response.json().await?;
                     
-                    // 检查是否有错误
+                    // Check for errors
                     if let Some(error) = rpc_response.error {
                         return Err(Error::msg(format!("JSON-RPC error: {} (code: {})", error.message, error.code)));
                     }
                     
-                    // 返回结果
+                    // Return result
                     Ok(rpc_response.result.unwrap_or(Value::Null))
                 } else {
-                    // 如果没有设置URL且没有自定义处理器，使用默认的处理逻辑
+                    // If no URL is set and no custom handler, use default processing logic
                     match tool_name.as_str() {
                         "get_weather" => {
-                            // 绑定默认值到变量以延长生命周期
+                            // Bind default values to variables to extend lifetime
                             let default_city = Value::String("Beijing".to_string());
                             let city_value = params.get("city").unwrap_or(&default_city);
                             let city = city_value.as_str().unwrap_or("Beijing");
@@ -288,12 +287,12 @@ impl McpClient for SimpleMcpClient {
         })
     }
     
-    // 断开连接
+    // Disconnect
     fn disconnect(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Error>> + Send + '_>> {
         let url = self.url.clone();
         let is_connected = self.is_mcp_server_connected.clone();
         Box::pin(async move {
-            // 简单实现：模拟断开连接成功
+            // Simple implementation: simulate successful disconnection
             if let Ok(mut conn) = is_connected.lock() {
                 *conn = false;
             }
@@ -302,11 +301,11 @@ impl McpClient for SimpleMcpClient {
         })
     }
     
-    // 获取工具响应
+    // Get tool response
     fn get_response(&self, tool_call_id: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, Error>> + Send + '_>> {
         let tool_call_id = tool_call_id.to_string();
         Box::pin(async move {
-            // 简单实现：返回模拟的工具响应
+            // Simple implementation: return simulated tool response
             Ok(serde_json::json!({
                 "tool_call_id": tool_call_id,
                 "status": "completed",
@@ -317,18 +316,18 @@ impl McpClient for SimpleMcpClient {
         })
     }
     
-    // 克隆方法
+    // Clone method
     fn clone(&self) -> Box<dyn McpClient> {
-        // 手动创建 available_tools 的深拷贝
+        // Manually create deep copy of available_tools
         let tools = self.available_tools.iter().map(|t| McpTool {
             name: t.name.clone(),
             description: t.description.clone()
         }).collect();
         
-        // 复制工具处理器
+        // Copy tool handlers
         let tool_handlers = self.tool_handlers.clone();
 
-        // 克隆连接状态
+        // Clone connection status
         let is_connected = if let Ok(conn) = self.is_mcp_server_connected.lock() {
             Arc::new(Mutex::new(*conn))
         } else {
@@ -348,87 +347,71 @@ impl McpClient for SimpleMcpClient {
         let url = self.url.clone();
         Box::pin(async move {
             if !url.is_empty() {
-                // 构造JSON-RPC ping请求
+                // 创建 ping 请求
                 let request = JSONRPCRequest {
                     jsonrpc: "2.0".to_string(),
-                    id: Some(Value::String(Uuid::new_v4().to_string())),
+                    id: Some(Value::Number(serde_json::Number::from(1))),
                     method: "ping".to_string(),
                     params: None,
                 };
-
-                // 发送HTTP POST请求
+            
+                // 发送请求到服务器 - 使用正确的路径 /rpc
+                let url = format!("{}/rpc", url);
                 let client = reqwest::Client::new();
                 let response = client
-                    .post(&format!("{}/rpc", url))
+                    .post(&url)
+                    .header("Content-Type", "application/json")
                     .json(&request)
                     .send()
-                    .await;
-
-                // 检查请求是否成功发送
-                match response {
-                    Ok(response) => {
-                        // 检查HTTP状态码
-                        if !response.status().is_success() {
-                            let status = response.status();
-                            let body = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
-                            return Err(Error::msg(format!("MCP server returned HTTP error {}: {}. Response body: {}", status.as_u16(), status.canonical_reason().unwrap_or("Unknown error"), body)));
-                        }
-
-                        // 获取响应文本用于调试
-                        let response_text = response.text().await
-                            .map_err(|e| Error::msg(format!("Failed to read response body: {}", e)))?;
-                        
-                        // 检查响应是否为空
-                        if response_text.trim().is_empty() {
-                            return Err(Error::msg("MCP server returned empty response"));
-                        }
-
-                        // 尝试解析JSON
-                        let rpc_response: JSONRPCResponse = serde_json::from_str(&response_text)
-                            .map_err(|e| Error::msg(format!("Failed to parse response as JSON: {}. Response content: {}", e, response_text)))?;
-                        
-                        // 检查是否有错误
-                        if let Some(error) = rpc_response.error {
-                            return Err(Error::msg(format!("JSON-RPC error: {} (code: {})", error.message, error.code)));
-                        }
-                        
-                        // 验证ping响应是否为空对象
-                        if let Some(result) = rpc_response.result {
-                            if result.is_object() && result.as_object().unwrap().is_empty() {
-                                // Ping成功，返回空对象
-                                return Ok(());
-                            } else {
-                                return Err(Error::msg(format!("Unexpected ping response: {:?}", result)));
-                            }
-                        } else {
-                            return Err(Error::msg("No result in ping response"));
-                        }
-                    }
-                    Err(e) => {
-                        return Err(Error::msg(format!("Failed to send ping request to MCP server: {}", e)));
+                    .await
+                    .map_err(|e| Error::msg(format!("Failed to send ping request: {}", e)))?;
+            
+                // 检查响应状态
+                if !response.status().is_success() {
+                    return Err(Error::msg(format!("Ping request failed with status: {}", response.status())));
+                }
+            
+                // 解析响应
+                let response_text = response.text().await
+                    .map_err(|e| Error::msg(format!("Failed to read response: {}", e)))?;
+                let response_value: Value = serde_json::from_str(&response_text)
+                    .map_err(|e| Error::msg(format!("Failed to parse response: {}", e)))?;
+            
+                // 检查响应中是否有错误
+                if let Some(error) = response_value.get("error") {
+                    if !error.is_null() {
+                        return Err(Error::msg(format!("Ping request returned error: {}", error)));
                     }
                 }
+                
+                // 检查是否有结果字段
+                if let Some(_result) = response_value.get("result") {
+                    // Ping 成功，返回空结果
+                    Ok(())
+                } else {
+                    Err(Error::msg("No result in ping response"))
+                }
             } else {
-                return Err(Error::msg("No URL set for MCP client"));
+                Err(Error::msg("No URL set for MCP client"))
             }
         })
     }
 }
 
-// MCP客户端接口
+// MCP client interface
 pub trait McpClient: Send + Sync {
-    // 连接到MCP服务器
+    // Connect to MCP server
     fn connect(&mut self, _url: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Error>> + Send + '_>> {
         Box::pin(async move {
-            // 简单实现：模拟连接成功
+            // Simple implementation: simulate successful connection
             Ok(())
         })
     }
     
-    // 获取可用工具列表
+    // Get available tool list
     fn get_tools(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<McpTool>, Error>> + Send + '_>> {
         Box::pin(async move {
-            // 简单实现：返回模拟的工具列表
+            // Simple implementation: return simulated tool list
             Ok(vec![McpTool {
                 name: "example_tool".to_string(),
                 description: "Example tool description".to_string()
@@ -436,29 +419,29 @@ pub trait McpClient: Send + Sync {
         })
     }
     
-    // 调用指定工具
+    // Call specified tool
     fn call_tool(&self, tool_name: &str, params: HashMap<String, Value>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, Error>> + Send + '_>> {
         let _tool_name = tool_name.to_string();
         let _params = params.clone();
         Box::pin(async move {
-            // 默认实现返回错误，因为trait不知道如何发送HTTP请求
+            // Default implementation returns error because trait doesn't know how to send HTTP requests
             Err(Error::msg("HTTP client not implemented in trait"))
         })
     }
     
-    // 断开连接
+    // Disconnect
     fn disconnect(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Error>> + Send + '_>> {
         Box::pin(async move {
-            // 简单实现：模拟断开连接成功
+            // Simple implementation: simulate successful disconnection
             Ok(())
         })
     }
     
-    // 获取工具响应
+    // Get tool response
     fn get_response(&self, tool_call_id: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, Error>> + Send + '_>> {
         let tool_call_id = tool_call_id.to_string();
         Box::pin(async move {
-            // 简单实现：返回模拟的工具响应
+            // Simple implementation: return simulated tool response
             Ok(serde_json::json!({
                 "tool_call_id": tool_call_id,
                 "status": "completed",
@@ -469,13 +452,13 @@ pub trait McpClient: Send + Sync {
         })
     }
     
-    // 克隆方法
+    // Clone method
     fn clone(&self) -> Box<dyn McpClient>;
     
-    // Ping服务器
+    // Ping server
     fn ping(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Error>> + Send + '_>> {
         Box::pin(async move {
-            // 默认实现返回错误，因为trait不知道如何发送HTTP请求
+            // Default implementation returns error because trait doesn't know how to send HTTP requests
             Err(Error::msg("HTTP client not implemented in trait"))
         })
     }

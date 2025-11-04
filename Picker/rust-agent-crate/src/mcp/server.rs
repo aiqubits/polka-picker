@@ -1,4 +1,4 @@
-// MCP服务器抽象定义
+// MCP server abstract definition
 use anyhow::Error;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ struct CallToolParams {
     arguments: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
-// MCP服务器实现
+// MCP server implementation
 pub struct SimpleMcpServer {
     address: String,
     tools: Arc<Mutex<HashMap<String, Arc<dyn Tool>>>>,
@@ -49,13 +49,13 @@ impl SimpleMcpServer {
     }
 }
 
-// 简单的测试handler
+// Simple test handler
 #[axum::debug_handler]
 async fn test_handler() -> &'static str {
     "Hello, Rust-Agent!"
 }
 
-// 处理JSON-RPC请求
+// Handle JSON-RPC request
 #[axum::debug_handler]
 async fn handle_jsonrpc_request(
     State(state): State<Arc<SimpleMcpServerState>>,
@@ -63,7 +63,7 @@ async fn handle_jsonrpc_request(
 ) -> Json<JSONRPCResponse> {
     let response = match payload.method.as_str() {
         "tools/call" => {
-            // 处理工具调用请求
+            // Handle tool call request
             match handle_tool_call(state, payload.params).await {
                 Ok(result) => {
                     JSONRPCResponse {
@@ -87,7 +87,7 @@ async fn handle_jsonrpc_request(
             }
         }
         "ping" => {
-            // 处理ping请求
+            // Handle ping request
             JSONRPCResponse {
                 jsonrpc: "2.0".to_string(),
                 id: Some(payload.id.unwrap_or(Value::Null)),
@@ -96,7 +96,7 @@ async fn handle_jsonrpc_request(
             }
         }
         "tools/list" => {
-            // 处理工具列表请求
+            // Handle tool list request
             match handle_list_tools(state).await {
                 Ok(result) => {
                     JSONRPCResponse {
@@ -120,7 +120,7 @@ async fn handle_jsonrpc_request(
             }
         }
         _ => {
-            // 不支持的方法
+            // Unsupported method
             JSONRPCResponse {
                 jsonrpc: "2.0".to_string(),
                 id: Some(payload.id.unwrap_or(Value::Null)),
@@ -139,10 +139,10 @@ async fn handle_jsonrpc_request(
 async fn handle_list_tools(
     state: Arc<SimpleMcpServerState>,
 ) -> Result<serde_json::Value, Error> {
-    // 获取所有已注册的工具
+    // Get all registered tools
     let tools_map = state.tools.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
     
-    // 转换为MCP协议要求的工具格式
+    // Convert to tool format required by MCP protocol
     let mut tools_list = Vec::new();
     for (_, tool) in tools_map.iter() {
         let mcp_tool = serde_json::json!({
@@ -157,7 +157,7 @@ async fn handle_list_tools(
         tools_list.push(mcp_tool);
     }
     
-    // 构造响应
+    // Construct response
     let result = serde_json::json!({
         "tools": tools_list
     });
@@ -169,11 +169,11 @@ async fn handle_tool_call(
     state: Arc<SimpleMcpServerState>,
     params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, Error> {
-    // 解析参数
+    // Parse parameters
     let call_params: CallToolParams = serde_json::from_value(params.unwrap_or(serde_json::Value::Null))
         .map_err(|e| Error::msg(format!("Invalid parameters: {}", e)))?;
     
-    // 查找工具并获取其Arc引用
+    // Find tool and get its Arc reference
     let tool = {
         let tools = state.tools.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
         tools.get(&call_params.name)
@@ -181,84 +181,84 @@ async fn handle_tool_call(
             .clone()
     };
     
-    // 准备工具输入参数
+    // Prepare tool input parameters
     let input_str = if let Some(args) = call_params.arguments {
         serde_json::to_string(&args)?
     } else {
         "{}".to_string()
     };
     
-    // 调用工具（现在可以在不持有锁的情况下调用）
+    // Call tool (now can be called without holding the lock)
     let result = tool.invoke(&input_str).await?;
     Ok(serde_json::Value::String(result))
 }
 
-// 服务器状态结构体
+// Server state structure
 #[derive(Clone)]
 struct SimpleMcpServerState {
     tools: Arc<Mutex<HashMap<String, Arc<dyn Tool>>>>,
 }
 
-// MCP服务器抽象
+// MCP server abstraction
 #[async_trait::async_trait]
 pub trait McpServer: Send + Sync {
-    // 启动MCP服务器
+    // Start MCP server
     async fn start(&self, address: &str) -> Result<(), Error>;
     
-    // 注册工具到MCP服务器
+    // Register tool to MCP server
     fn register_tool(&self, tool: Arc<dyn Tool>) -> Result<(), Error>;
     
-    // 停止MCP服务器
+    // Stop MCP server
     async fn stop(&self) -> Result<(), Error>;
 }
 
 #[async_trait::async_trait]
 impl McpServer for SimpleMcpServer {
-    // 启动MCP服务器
+    // Start MCP server
     async fn start(&self, address: &str) -> Result<(), Error> {
         info!("Starting MCP server on {}", address);
         
-        // 创建服务器状态
+        // Create server state
         let state = Arc::new(SimpleMcpServerState {
             tools: self.tools.clone(),
         });
         
-        // 创建路由
+        // Create routes
         let app = Router::new()
             .route("/rpc", post(handle_jsonrpc_request))
             .route("/test", get(test_handler))
             .with_state(state)
-            .layer(CorsLayer::permissive()); // 允许所有CORS请求
+            .layer(CorsLayer::permissive()); // Allow all CORS requests
         
-        // 启动服务器
+        // Start server
         let listener = TcpListener::bind(address).await
             .map_err(|e| Error::msg(format!("Failed to bind to address {}: {}", address, e)))?;
         
         info!("MCP server listening on http://{}", address);
         
-        // 在后台任务中运行服务器
+        // Run server in background task
         let handle = tokio::spawn(async move {
             if let Err(e) = axum::serve(listener, app.into_make_service()).await {
                 error!("Server error: {}", e);
             }
         });
         
-        // 更新服务器状态
-    {
-        let mut is_running = self.is_running.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
-        *is_running = true;
-    }
-    
-    // 保存服务器句柄
-    {
-        let mut server_handle = self.server_handle.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
-        *server_handle = Some(handle);
-    }
+        // Update server status
+        {
+            let mut is_running = self.is_running.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
+            *is_running = true;
+        }
+        
+        // Save server handle
+        {
+            let mut server_handle = self.server_handle.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
+            *server_handle = Some(handle);
+        }
         
         Ok(())
     }
     
-    // 注册工具到MCP服务器
+    // Register tool to MCP server
     fn register_tool(&self, tool: Arc<dyn Tool>) -> Result<(), Error> {
         let name = tool.name().to_string();
         let mut tools = self.tools.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
@@ -266,17 +266,17 @@ impl McpServer for SimpleMcpServer {
         Ok(())
     }
     
-    // 停止MCP服务器
+    // Stop MCP server
     async fn stop(&self) -> Result<(), Error> {
         info!("Stopping MCP server");
         
-        // 更新服务器状态
+        // Update server status
         {
             let mut is_running = self.is_running.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
             *is_running = false;
         }
         
-        // 取消服务器任务
+        // Cancel server task
         {
             let mut server_handle = self.server_handle.lock().map_err(|e| Error::msg(format!("Failed to acquire lock: {}", e)))?;
             if let Some(handle) = server_handle.take() {

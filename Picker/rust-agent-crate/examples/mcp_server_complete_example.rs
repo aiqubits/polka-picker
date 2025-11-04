@@ -206,7 +206,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server.start("127.0.0.1:6000").await?;
     
     println!("MCP服务器已启动，地址: 127.0.0.1:6000");
-    println!("已注册工具:");
+    println!("MCP Server端工具:");
     println!("  1. get_weather: Get the weather information for a specified city. For example: 'What's the weather like in Beijing?'");
     println!("  2. simple_calculate: Perform simple mathematical calculations. Input should be a mathematical expression with numbers and operators (+, -, *, /). For example: '15.5 + 24.3'");
     println!("服务器正在运行中，按 Ctrl+C 停止服务器");

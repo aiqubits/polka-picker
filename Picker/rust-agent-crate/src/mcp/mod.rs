@@ -1,9 +1,9 @@
-// MCP适配器实现模块定义
+// MCP adapter implementation module definition
 mod client;
 mod adapter;
 mod server;
 
-// 重新导出模块内容
+// Re-export module content
 pub use client::{McpClient, SimpleMcpClient, McpTool};
 pub use adapter::McpToolAdapter;
 pub use server::{McpServer, SimpleMcpServer};

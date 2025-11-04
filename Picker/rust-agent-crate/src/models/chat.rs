@@ -1,27 +1,27 @@
-// 聊天模型接口和相关结构体定义
+// Chat model interface and related structure definitions
 use anyhow::Error;
 use crate::models::message::{ChatMessage, TokenUsage};
 
-// 简化的聊天完成结构
+// Simplified chat completion structure
 pub struct ChatCompletion {
     pub message: ChatMessage,
     pub usage: Option<TokenUsage>,
     pub model_name: String,
 }
 
-// 聊天模型接口
+// Chat model interface
 pub trait ChatModel: Send + Sync {
-    // 模型基本信息
+    // Basic model information
     fn model_name(&self) -> Option<&str> {
         None
     }
 
-    // 模型基础URL
+    // Model base URL
     fn base_url(&self) -> String {
         "https://api.openai.com/v1".to_string()
     }
     
-    // 核心方法：处理聊天消息
+    // Core method: handle chat messages
     fn invoke(&self, messages: Vec<ChatMessage>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ChatCompletion, Error>> + Send + '_>> {
         let _messages = messages;
         Box::pin(async move {

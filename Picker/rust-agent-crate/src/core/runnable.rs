@@ -1,4 +1,4 @@
-// Runnable 接口定义 - 框架的核心概念
+// Runnable interface definition - core concept of the framework
 use std::collections::HashMap;
 use std::pin::Pin;
 use futures::stream::Stream;
@@ -6,12 +6,12 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-// Runnable 接口定义
+// Runnable interface definition
 pub trait Runnable<I: Send + 'static, O: Send + 'static>: Send + Sync {
-    // 核心异步调用方法（主要入口点）
+    // Core async call method (main entry point)
     fn invoke(&self, input: I) -> Pin<Box<dyn std::future::Future<Output = Result<O, anyhow::Error>> + Send>>;
     
-    // 带配置的调用变体 - 可选实现
+    // Call variant with configuration - optional implementation
     fn invoke_with_config(
         &self, 
         input: I, 
@@ -20,11 +20,11 @@ pub trait Runnable<I: Send + 'static, O: Send + 'static>: Send + Sync {
         self.invoke(input)
     }
     
-    // 异步批量处理多个输入
+    // Async batch processing for multiple inputs
     fn batch(&self, inputs: Vec<I>) -> Pin<Box<dyn std::future::Future<Output = Vec<Result<O, anyhow::Error>>> + Send>> {
         let self_clone = self.clone_to_owned();
         Box::pin(async move {
-            // 提供默认实现，具体组件可覆盖优化
+            // Provide default implementation, specific components can override for optimization
             futures::future::join_all(inputs.into_iter().map(|input| {
                 let self_clone_inner = self_clone.clone_to_owned();
                 async move {
@@ -34,34 +34,34 @@ pub trait Runnable<I: Send + 'static, O: Send + 'static>: Send + Sync {
         })
     }
     
-    // 批量处理的变体 - 可选实现
-    // 暂时简化实现，避免复杂的异步组合问题
+    // Variant of batch processing - optional implementation
+    // Temporarily simplified implementation to avoid complex async composition issues
     fn batch_with_config(
         &self, 
         inputs: Vec<I>, 
         _config: Option<HashMap<String, Value>>
     ) -> Pin<Box<dyn std::future::Future<Output = Vec<Result<O, anyhow::Error>>> + Send>> {
-        // 直接调用 batch 方法
+        // Directly call the batch method
         self.batch(inputs)
     }
     
-    // 流式处理接口 - 同步实现
+    // Stream processing interface - synchronous implementation
     fn stream(&self, input: I) -> Box<dyn Stream<Item = Result<O, anyhow::Error>> + Send> {
-        // 简单实现：使用futures的stream::once包装单个结果
+        // Simple implementation: use futures' stream::once to wrap a single result
         let self_clone = self.clone_to_owned();
         let (tx, rx) = tokio::sync::mpsc::channel::<Result<O, anyhow::Error>>(1);
         
-        // 在单独的任务中执行invoke并发送结果
+        // Execute invoke in a separate task and send the result
         tokio::spawn(async move {
             let result = self_clone.invoke(input).await;
             let _ = tx.send(result).await;
         });
         
-        // 将mpsc接收器转换为Stream
+        // Convert mpsc receiver to Stream
         Box::new(tokio_stream::wrappers::ReceiverStream::new(rx))
     }
     
-    // 异步流式处理 - 可选实现
+    // Async stream processing - optional implementation
     fn astream(
         &self, 
         _input: I
@@ -69,19 +69,19 @@ pub trait Runnable<I: Send + 'static, O: Send + 'static>: Send + Sync {
         let _self_clone = self.clone_to_owned();
         
         Box::pin(async move {
-            // 简单实现：返回一个空的流
+            // Simple implementation: return an empty stream
             let (_tx, rx) = mpsc::channel(10);
-            // 创建并返回一个空流，添加显式类型转换
+            // Create and return an empty stream, add explicit type conversion
             let stream: Box<dyn Stream<Item = Result<O, anyhow::Error>> + Send> = Box::new(ReceiverStream::new(rx));
             stream
         })
     }
     
-    // 用于astream默认实现的辅助方法，需要在实现时提供
+    // Helper method for astream default implementation, needs to be provided when implementing
     fn clone_to_owned(&self) -> Box<dyn Runnable<I, O> + Send + Sync>;
 }
 
-// Runnable扩展trait
+// Runnable extension trait
 pub trait RunnableExt<I: Send + 'static, O: Send + 'static> {
     fn pipe<NextO: Send + 'static>(
         self: Box<Self>,
@@ -91,7 +91,7 @@ pub trait RunnableExt<I: Send + 'static, O: Send + 'static> {
         Self: Sized + 'static + Send + Sync;
 }
 
-// 为Runnable提供扩展方法
+// Provide extension methods for Runnable
 impl<T: Runnable<I, O> + ?Sized, I: Send + 'static, O: Send + 'static> RunnableExt<I, O> for T {
     fn pipe<NextO: Send + 'static>(
         self: Box<Self>,
@@ -100,18 +100,18 @@ impl<T: Runnable<I, O> + ?Sized, I: Send + 'static, O: Send + 'static> RunnableE
     where
         Self: Sized + 'static + Send + Sync,
     {
-        // 调用pipe函数来组合两个Runnable
+        // Call the pipe function to combine two Runnables
         pipe(*self, next)
     }
 }
 
-// 工具函数：创建管道连接两个Runnable
+// Utility function: create a pipeline connecting two Runnables
 pub fn pipe<I: Send + 'static, O1: Send + 'static, O2: Send + 'static>(
     first: impl Runnable<I, O1> + Send + Sync + 'static,
     second: impl Runnable<O1, O2> + Send + Sync + 'static
 ) -> Box<dyn Runnable<I, O2> + Send + Sync> {
-    // 实现组合逻辑：创建一个实现Runnable的结构体
-    // 封装两个组件并按顺序执行
+    // Implement composition logic: create a struct that implements Runnable
+    // Wrap two components and execute them in sequence
     struct PipeImpl<I: Send + 'static, O1: Send + 'static, O2: Send + 'static> {
         first: Box<dyn Runnable<I, O1> + Send + Sync>,
         second: Box<dyn Runnable<O1, O2> + Send + Sync>,
@@ -129,7 +129,7 @@ pub fn pipe<I: Send + 'static, O1: Send + 'static, O2: Send + 'static>(
         }
         
         fn clone_to_owned(&self) -> Box<dyn Runnable<I, O2> + Send + Sync> {
-            // 注意：此处实现假设组件可以被克隆，实际实现可能需要调整
+            // Note: this implementation assumes components can be cloned, actual implementation may need adjustment
             Box::new(PipeImpl {
                 first: self.first.clone_to_owned(),
                 second: self.second.clone_to_owned(),
@@ -137,7 +137,7 @@ pub fn pipe<I: Send + 'static, O1: Send + 'static, O2: Send + 'static>(
         }
     }
     
-    // Send 和 Sync 会自动推导，因为内部字段已经是 Send + Sync 的
+    // Send and Sync will be automatically derived because internal fields are already Send + Sync
     
     Box::new(PipeImpl {
         first: Box::new(first),
@@ -145,28 +145,28 @@ pub fn pipe<I: Send + 'static, O1: Send + 'static, O2: Send + 'static>(
     })
 }
 
-// RunnableSequence结构体
+// RunnableSequence struct
 pub struct RunnableSequence<I, O> {
-    // 在实际实现中，这里需要存储链中的各个组件
-    // 例如：对于简单的双组件链
+    // In actual implementation, this needs to store the various components in the chain
+    // For example: for a simple two-component chain
     // first: Box<dyn Runnable<I, O1> + Send + Sync>,
     // second: Box<dyn Runnable<O1, O> + Send + Sync>,
     
-    // 实际实现可能更复杂，取决于支持的链长度
+    // Actual implementation may be more complex, depending on the supported chain length
     inner: Box<dyn Runnable<I, O> + Send + Sync>,
 }
 
-// RunnableSequence的辅助方法
+// Helper methods for RunnableSequence
 impl<I: Send + 'static, O: Send + 'static> RunnableSequence<I, O> {
     pub fn new(runnable: impl Runnable<I, O> + Send + Sync + 'static) -> Self {
-        // 实际实现中需要将runnable存储在结构体中
+        // In actual implementation, need to store runnable in the struct
         Self {
             inner: Box::new(runnable),
         }
     }
 }
 
-// 为RunnableSequence实现Runnable接口
+// Implement Runnable interface for RunnableSequence
 impl<I: 'static + Send, O: 'static + Send> Runnable<I, O> for RunnableSequence<I, O> {
     fn invoke(&self, input: I) -> Pin<Box<dyn std::future::Future<Output = Result<O, anyhow::Error>> + Send>> {
         let inner = self.inner.clone_to_owned();
@@ -180,7 +180,7 @@ impl<I: 'static + Send, O: 'static + Send> Runnable<I, O> for RunnableSequence<I
     }
 }
 
-// 为Box<dyn Runnable>实现clone_to_owned方法的示例
+// Example implementation of clone_to_owned method for Box<dyn Runnable>
 impl<I: Send + 'static, O: Send + 'static> Runnable<I, O> for Box<dyn Runnable<I, O> + Send + Sync> {
     fn invoke(&self, input: I) -> Pin<Box<dyn std::future::Future<Output = Result<O, anyhow::Error>> + Send>> {
         let self_clone = self.clone_to_owned();

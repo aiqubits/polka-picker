@@ -1,4 +1,4 @@
-// 基础记忆接口定义
+// Basic memory interface definition
 use anyhow::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,29 +8,45 @@ use std::pin::Pin;
 use std::future::Future;
 use log::info;
 
-// 最小化记忆抽象接口（与langchain-core对齐）
+// Memory variable type alias
+pub type MemoryVariables = HashMap<String, Value>;
+
+// Minimal memory abstraction interface
 pub trait BaseMemory: Send + Sync {
-    // 获取记忆变量名
+    // Get memory variable names
     fn memory_variables(&self) -> Vec<String>;
     
-    // 核心方法：加载记忆变量
-    fn load_memory_variables(&self, inputs: &HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<HashMap<String, Value>, Error>> + Send>>;
+    // Core method: load memory variables
+    fn load_memory_variables<'a>(&'a self, inputs: &'a HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<HashMap<String, Value>, Error>> + Send + 'a>>;
     
-    // 核心方法：保存上下文
-    fn save_context(&self, inputs: &HashMap<String, Value>, outputs: &HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+    // Core method: save context
+    fn save_context<'a>(&'a self, inputs: &'a HashMap<String, Value>, outputs: &'a HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>;
     
-    // 可选方法：清除记忆
-    fn clear(&self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+    // Optional method: clear memory
+    fn clear<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>;
     
-    // 克隆方法
+    // Clone method
     fn clone_box(&self) -> Box<dyn BaseMemory>;
+    
+    // New method: get session ID
+    fn get_session_id(&self) -> Option<&str>;
+    
+    // New method: set session ID
+    fn set_session_id(&mut self, session_id: String);
+    
+    // New method: get token count
+    fn get_token_count(&self) -> Result<usize, Error>;
+    
+    // New method: get Any reference for type conversion
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
-// 简单的内存实现，类似于Langchain的ConversationBufferMemory
+// Simple memory implementation, similar to Langchain's ConversationBufferMemory
 #[derive(Debug)]
 pub struct SimpleMemory {
     memories: Arc<RwLock<HashMap<String, Value>>>,
     memory_key: String,
+    session_id: Option<String>,
 }
 
 impl Clone for SimpleMemory {
@@ -38,6 +54,7 @@ impl Clone for SimpleMemory {
         Self {
             memories: Arc::clone(&self.memories),
             memory_key: self.memory_key.clone(),
+            session_id: self.session_id.clone(),
         }
     }
 }
@@ -47,6 +64,7 @@ impl SimpleMemory {
         Self {
             memories: Arc::new(RwLock::new(HashMap::new())),
             memory_key: "chat_history".to_string(),
+            session_id: None,
         }
     }
     
@@ -54,6 +72,7 @@ impl SimpleMemory {
         Self {
             memories: Arc::new(RwLock::new(HashMap::new())),
             memory_key,
+            session_id: None,
         }
     }
     
@@ -61,6 +80,7 @@ impl SimpleMemory {
         Self {
             memories: Arc::new(RwLock::new(memories)),
             memory_key: "chat_history".to_string(),
+            session_id: None,
         }
     }
     
@@ -93,7 +113,7 @@ impl BaseMemory for SimpleMemory {
         vec![self.memory_key.clone()]
     }
     
-    fn load_memory_variables(&self, _inputs: &HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<HashMap<String, Value>, Error>> + Send>> {
+    fn load_memory_variables<'a>(&'a self, _inputs: &'a HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<HashMap<String, Value>, Error>> + Send + 'a>> {
         let memories = Arc::clone(&self.memories);
         Box::pin(async move {
             let memories = memories.read().await;
@@ -101,7 +121,7 @@ impl BaseMemory for SimpleMemory {
         })
     }
     
-    fn save_context(&self, inputs: &HashMap<String, Value>, outputs: &HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
+    fn save_context<'a>(&'a self, inputs: &'a HashMap<String, Value>, outputs: &'a HashMap<String, Value>) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
         let memories = Arc::clone(&self.memories);
         let input_clone = inputs.clone();
         let output_clone = outputs.clone();
@@ -110,15 +130,15 @@ impl BaseMemory for SimpleMemory {
         Box::pin(async move {
             let mut memories = memories.write().await;
             
-            // 获取或创建聊天历史数组
+            // Get or create chat history array
             let chat_history = memories.entry(memory_key.clone()).or_insert_with(|| Value::Array(vec![]));
             
-            // 确保 chat_history 是数组类型
+            // Ensure chat_history is an array type
             if !chat_history.is_array() {
                 *chat_history = Value::Array(vec![]);
             }
             
-            // 将输入作为人类消息或工具消息添加到聊天历史
+            // Add input as human message or tool message to chat history
             if let Some(input_value) = input_clone.get("input") {
                 let user_message = serde_json::json!({
                         "role": "human",
@@ -126,12 +146,12 @@ impl BaseMemory for SimpleMemory {
                     });
                 
                 if let Value::Array(ref mut arr) = chat_history {
-                    info!("添加到聊天历史: {:?}", user_message);
+                    info!("Adding to chat history: {:?}", user_message);
                     arr.push(user_message);
                 }
             }
             
-            // 将输出作为AI消息添加到聊天历史
+            // Add output as AI message to chat history
             if let Some(output_value) = output_clone.get("output") {
                 let ai_message = serde_json::json!({
                     "role": "ai",
@@ -147,7 +167,7 @@ impl BaseMemory for SimpleMemory {
         })
     }
     
-    fn clear(&self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
+    fn clear<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
         let memories = Arc::clone(&self.memories);
         Box::pin(async move {
             let mut memories = memories.write().await;
@@ -159,9 +179,27 @@ impl BaseMemory for SimpleMemory {
     fn clone_box(&self) -> Box<dyn BaseMemory> {
         Box::new(self.clone())
     }
+    
+    fn get_session_id(&self) -> Option<&str> {
+        self.session_id.as_deref()
+    }
+    
+    fn set_session_id(&mut self, session_id: String) {
+        self.session_id = Some(session_id);
+    }
+    
+    fn get_token_count(&self) -> Result<usize, Error> {
+        // Simplified implementation: estimate token count based on character count
+        let count = self.memory_key.len() + self.session_id.as_ref().map(|s| s.len()).unwrap_or(0);
+        Ok(count)
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
-// 为 Box<dyn BaseMemory> 实现 Clone trait
+// Implement Clone trait for Box<dyn BaseMemory>
 impl Clone for Box<dyn BaseMemory> {
     fn clone(&self) -> Self {
         self.as_ref().clone_box()

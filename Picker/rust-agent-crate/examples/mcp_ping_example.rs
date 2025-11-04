@@ -14,16 +14,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server.start(server_address).await?;
     
     // 等待服务器启动
-    // tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
     
     // 创建 MCP 客户端
     let mut client = SimpleMcpClient::new(format!("http://{}", server_address));
     
-    // 连接到服务器
-    client.connect(&format!("http://{}/rpc", server_address)).await?;
+    // 连接到服务器 - 修复URL格式
+    client.connect(&format!("http://{}", server_address)).await?;
+    client.set_server_connected(true);
     
     // 执行多次 ping 测试
-    for i in 1..=1 {
+    for i in 1..=3 {
         let start_time = std::time::Instant::now();
         
         match client.ping().await {

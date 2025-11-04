@@ -1,4 +1,4 @@
-// OpenAI模型实现 - 基于LangChain设计
+// OpenAI model implementation - based on LangChain design
 use super::chat::{ChatCompletion, ChatModel};
 use super::message::{ChatMessage, ChatMessageContent, TokenUsage};
 use anyhow::Error;
@@ -16,56 +16,56 @@ struct OpenAIMessage {
     tool_call_id: Option<String>,
 }
 
-// 令牌使用详情结构体 - 参考LangChain的InputTokenDetails和OutputTokenDetails
+// Token usage details structure - referencing LangChain's InputTokenDetails and OutputTokenDetails
 #[derive(Deserialize, Default)]
 struct InputTokenDetails {
     audio_tokens: Option<usize>,
     cache_read: Option<usize>,
     reasoning_tokens: Option<usize>,
-    // 其他可能的字段
+    // Other possible fields
 }
 
 #[derive(Deserialize, Default)]
 struct OutputTokenDetails {
     cache_write: Option<usize>,
     reasoning_tokens: Option<usize>,
-    // 其他可能的字段
+    // Other possible fields
 }
 
-// OpenAI传统API使用统计
+// OpenAI traditional API usage statistics
 #[derive(Deserialize, Default)]
 struct OpenAIUsage {
     prompt_tokens: usize,
     completion_tokens: usize,
     total_tokens: usize,
-    // 扩展字段，支持更多细节
+    // Extended fields, supporting more details
     input_tokens_details: Option<InputTokenDetails>,
     output_tokens_details: Option<OutputTokenDetails>,
 }
 
-// Responses API使用统计格式
+// Responses API usage statistics format
 #[derive(Deserialize, Default)]
 struct OpenAIResponsesUsage {
     input_tokens: Option<usize>,
     output_tokens: Option<usize>,
     total_tokens: Option<usize>,
-    // Responses API特有的字段
+    // Fields specific to Responses API
     input_tokens_details: Option<InputTokenDetails>,
     output_tokens_details: Option<OutputTokenDetails>,
 }
 
-// 通用API响应结构 - 兼容OpenAI和其他提供商
+// Generic API response structure - compatible with OpenAI and other providers
 #[derive(Deserialize)]
 struct OpenAIResponse {
     id: Option<String>,
     object: Option<String>,
     created: Option<u64>,
     model: Option<String>,
-    choices: Vec<OpenAIChoice>, // 这个字段通常是必需的
+    choices: Vec<OpenAIChoice>, // This field is usually required
     usage: Option<OpenAIUsage>,
-    // 兼容Responses API的字段
+    // Fields compatible with Responses API
     output: Option<Vec<OpenAIChoice>>,
-    // 其他可能的响应字段
+    // Other possible response fields
 }
 
 #[derive(Deserialize)]
@@ -75,14 +75,14 @@ struct OpenAIChoice {
     finish_reason: String,
 }
 
-// API类型枚举 - 支持传统Chat Completions API和新的Responses API
+// API type enumeration - supporting traditional Chat Completions API and new Responses API
 #[derive(Debug, Clone, Copy)]
 enum OpenAIApiType {
     ChatCompletions,
     Responses,
 }
 
-// OpenAI模型实现 - 支持多种API格式
+// OpenAI model implementation - supporting multiple API formats
 #[derive(Clone)]
 pub struct OpenAIChatModel {
     client: Client,
@@ -97,7 +97,7 @@ pub struct OpenAIChatModel {
 }
 
 impl OpenAIChatModel {
-    /// 创建新的OpenAI聊天模型实例
+    /// Create a new OpenAI chat model instance
     pub fn new(api_key: String, base_url: Option<String>) -> Self {
         Self {
             client: Client::new(),
@@ -112,78 +112,78 @@ impl OpenAIChatModel {
         }
     }
 
-    /// 获取模型名称
+    /// Get model name
     pub fn model_name(&self) -> Option<&String> {
         self.model_name.as_ref()
     }
 
-    /// 获取基础URL
+    /// Get base URL
     pub fn base_url(&self) -> &String {
         &self.base_url
     }
 
-    /// 获取温度参数
+    /// Get temperature parameter
     pub fn temperature(&self) -> Option<f32> {
         self.temperature
     }
 
-    /// 获取最大令牌数
+    /// Get maximum number of tokens
     pub fn max_tokens(&self) -> Option<u32> {
         self.max_tokens
     }
 
-    /// 设置模型名称
+    /// Set model name
     pub fn with_model(mut self, model_name: String) -> Self {
         self.model_name = Some(model_name);
         self
     }
 
-    /// 设置温度参数
+    /// Set temperature parameter
     pub fn with_temperature(mut self, temperature: f32) -> Self {
         self.temperature = Some(temperature);
         self
     }
 
-    /// 设置最大令牌数
+    /// Set maximum number of tokens
     pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
         self.max_tokens = Some(max_tokens);
         self
     }
 
-    /// 设置API类型（Chat Completions或Responses）
+    /// Set API type (Chat Completions or Responses)
     pub fn with_api_type(mut self, api_type: OpenAIApiType) -> Self {
         self.api_type = api_type;
         self
     }
 
-    /// 添加额外的请求头
+    /// Add additional request headers
     pub fn with_additional_header(mut self, key: String, value: String) -> Self {
         self.additional_headers.insert(key, value);
         self
     }
 
-    /// 添加额外的请求参数
+    /// Add additional request parameters
     pub fn with_additional_param(mut self, key: String, value: serde_json::Value) -> Self {
         self.additional_params.insert(key, value);
         self
     }
 
-    /// 构建请求载荷 - 参考LangChain的_get_request_payload方法
+    /// Build request payload - referencing LangChain's _get_request_payload method
     fn _get_request_payload(&self, messages: &[OpenAIMessage]) -> Result<serde_json::Value, Error> {
         Ok(serde_json::json!({"messages": messages}))
     }
 
-    /// 转换消息到字典格式 - 参考LangChain的_convert_message_to_dict
+    /// Convert message to dictionary format - referencing LangChain's _convert_message_to_dict
     fn _convert_message_to_dict(&self, message: &OpenAIMessage) -> Result<serde_json::Value, Error> {
         Ok(serde_json::to_value(message)?)  
     }
 
-    /// 构建Responses API载荷 - 参考LangChain的_construct_responses_api_payload
+    /// Build Responses API payload - referencing LangChain's _construct_responses_api_payload
     fn _construct_responses_api_payload(&self, messages: &[OpenAIMessage]) -> Result<serde_json::Value, Error> {
         Ok(serde_json::json!({"messages": messages}))
     }
 
-    /// 创建使用元数据 - 参考LangChain的_create_usage_metadata
+    /// Create usage metadata - referencing LangChain's _create_usage_metadata
     fn _create_usage_metadata(&self, usage: &OpenAIUsage) -> TokenUsage {
         TokenUsage {
             prompt_tokens: usage.prompt_tokens,
@@ -192,7 +192,7 @@ impl OpenAIChatModel {
         }
     }
 
-    /// 创建Responses API的使用元数据 - 参考LangChain的_create_usage_metadata_responses
+    /// Create usage metadata for Responses API - referencing LangChain's _create_usage_metadata_responses
     fn _create_usage_metadata_responses(&self, usage: &OpenAIResponsesUsage) -> TokenUsage {
         TokenUsage {
             prompt_tokens: usage.input_tokens.unwrap_or(0),
@@ -201,9 +201,9 @@ impl OpenAIChatModel {
         }
     }
 
-    /// 转换字典到消息 - 参考LangChain的_convert_dict_to_message
+    /// Convert dictionary to message - referencing LangChain's _convert_dict_to_message
     fn _convert_dict_to_message(&self, message_dict: serde_json::Value) -> Result<ChatMessage, Error> {
-        // 简单实现：尝试从JSON中提取role和content
+        // Simple implementation: try to extract role and content from JSON
         let role = message_dict.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
         let content = message_dict.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
         
@@ -244,7 +244,7 @@ impl ChatModel for OpenAIChatModel {
         let additional_params = self.additional_params.clone();
 
         Box::pin(async move {
-            // 转换消息格式
+            // Convert message format
             let openai_messages: Vec<OpenAIMessage> = messages
                 .into_iter()
                 .map(|msg| match msg {
@@ -267,8 +267,8 @@ impl ChatModel for OpenAIChatModel {
                         tool_call_id: None,
                     },
                     ChatMessage::ToolMessage(content) => {
-                        info!("转换工具消息: role=tool, content={}", content.content);
-                        // 为工具消息添加tool_call_id
+                        info!("Converting tool message: role=tool, content={}", content.content);
+                        // Add tool_call_id for tool messages
                         let tool_call_id = content.additional_kwargs.get("tool_call_id")
                             .and_then(|v| v.as_str())
                             .unwrap_or("default_tool_call_id").to_string();
@@ -282,13 +282,13 @@ impl ChatModel for OpenAIChatModel {
                 })
                 .collect();
 
-            // 构建请求体
+            // Build request body
             let mut request_body = serde_json::json!({
                 "messages": openai_messages,
                 "model": model_name.clone().unwrap_or("".to_string()),
             });
 
-            // 添加可选参数
+            // Add optional parameters
             if let Some(temp) = temperature {
                 request_body["temperature"] = serde_json::json!(temp);
             }
@@ -296,38 +296,38 @@ impl ChatModel for OpenAIChatModel {
                 request_body["max_tokens"] = serde_json::json!(max);
             }
             
-            // 添加额外参数
+            // Add additional parameters
             for (key, value) in additional_params {
                 request_body[key] = value;
             }
 
-            // 构建完整的API路径，将base_url与具体端点拼接
+            // Build complete API path, concatenating base_url with specific endpoint
             let api_url = format!("{}/chat/completions", base_url);
             
-            // 构建请求
+            // Build request
             let mut request = client.post(&api_url)
                 .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json");
 
-            // 添加额外的请求头
+            // Add additional request headers
             for (key, value) in additional_headers {
                 request = request.header(key, value);
             }
             
-            // 发送请求
+            // Send request
             let response = request.json(&request_body).send().await?;
             
-            // 检查响应状态
+            // Check response status
             let status = response.status();
             if !status.is_success() {
                 let error_text = response.text().await?;
                 return Err(Error::msg(format!("API request failed: {} - {}", status, error_text)));
             }
 
-            // 解析响应
+            // Parse response
             let response: OpenAIResponse = response.json().await?;
 
-            // 处理响应
+            // Handle response
             let chat_message = match response.choices.first() {
                 Some(choice) => {
                     let message = &choice.message;
@@ -343,7 +343,7 @@ impl ChatModel for OpenAIChatModel {
                     }
                 },
                 None => {
-                    // 尝试使用output字段（Responses API）
+                    // Try to use output field (Responses API)
                     match &response.output {
                         Some(outputs) => {
                             match outputs.first() {
@@ -363,7 +363,7 @@ impl ChatModel for OpenAIChatModel {
                 },
             };
 
-            // 转换使用统计
+            // Convert usage statistics
             let usage = match &response.usage {
                 Some(openai_usage) => {
                     Some(TokenUsage {

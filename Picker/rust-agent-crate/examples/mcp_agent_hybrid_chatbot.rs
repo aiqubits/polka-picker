@@ -1,5 +1,5 @@
 // 混合模式MCP Agent示例 - 同时支持本地工具和MCP服务器工具
-use rust_agent::{run_agent, OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, SimpleMemory, BaseMemory, Agent};
+use rust_agent::{run_agent, OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, CompositeMemory, BaseMemory, Agent};
 use std::sync::Arc;
 use std::collections::HashMap;
 use chrono;
@@ -15,7 +15,7 @@ use log::{info, error};
 async fn main() {
     // 初始化日志记录器
     env_logger::Builder::new()
-        .filter_level(LevelFilter::Error)  // 设置日志级别为Info以便查看详细信息
+        .filter_level(LevelFilter::Info)  // 设置日志级别为Error以便查看错误信息
         .init();
     
     info!("=== Rust Agent 混合模式示例 ===");
@@ -61,21 +61,37 @@ async fn main() {
     match mcp_client.connect(&mcp_url).await {
         Ok(_) => {
             info!("Successfully connected to MCP server at {}", mcp_url);
+            
+            // 设置连接状态为已连接
+            mcp_client.set_server_connected(true);
+            
+            // // 获取服务器工具
+            // match mcp_client.get_tools().await {
+            //     Ok(server_tools) => {
+            //         info!("Retrieved {} tools from MCP server", server_tools.len());
+            //         for tool in &server_tools {
+            //             info!("Server tool: {} - {}", tool.name, tool.description);
+            //         }
+            //     },
+            //     Err(e) => {
+            //         error!("Failed to get tools from MCP server: {}", e);
+            //     }
+            // }
         },
         Err(e) => {
             error!("Failed to connect to MCP server: {}", e);
         }
     }
 
-    info!("Using model: {}", model.model_name().map_or("Model not specified", |v| v));
-    info!("----------------------------------------");
-    
-    let client_arc: Arc<dyn McpClient> = Arc::new(mcp_client);
-    
-    // 创建记忆模块实例
-    let memory = SimpleMemory::new();
+    // 创建记忆模块实例 - 使用CompositeMemory替代SimpleMemory
+    let memory = CompositeMemory::with_basic_params(
+        "data".into(),           // 组合记忆数据存储目录
+        200,           // 摘要阈值（token数量）
+        10          // 保留的最近消息数量
+    ).await.expect("Failed to create CompositeMemory");
 
     // 创建Agent实例
+    let client_arc: Arc<dyn McpClient> = Arc::new(mcp_client);
     let mut agent = McpAgent::with_openai_model_and_memory(
         client_arc.clone(),
         "You are an AI assistant that can use both local tools and remote MCP server tools. Please decide whether to use tools based on the user's needs.".to_string(),
@@ -88,6 +104,9 @@ async fn main() {
     if let Err(e) = agent.auto_add_tools().await {
         error!("Warning: Failed to auto add tools to McpAgent: {}", e);
     }
+
+    info!("Using model: {}", model.model_name().map_or("Model not specified", |v| v));
+    info!("----------------------------------------");
     
     println!("基于MCP的混合模式AI Agent聊天机器人已启动！");
     println!("输入'退出'结束对话");

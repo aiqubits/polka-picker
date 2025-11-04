@@ -1,7 +1,7 @@
-// Agent模块定义
+// Agent module definition
 mod agent;
 mod mcp_agent;
 
-// 重新导出模块内容
+// Re-export module content
 pub use agent::{Agent, AgentAction, AgentFinish, AgentOutput, AgentRunner, SimpleAgent, SimpleAgentRunner};
 pub use mcp_agent::McpAgent;

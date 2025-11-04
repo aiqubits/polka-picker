@@ -1,30 +1,30 @@
-// Rust Agent: 与LangChain-Core对齐的AI Agent框架
+// Rust Agent: AI Agent framework aligned with LangChain-Core
 
 mod core;
 mod models;
 pub mod tools;
-mod memory;
+pub mod memory;
 mod agents;
 mod callbacks;
 mod mcp;
 
-// 重新导出主要组件供外部使用
+// Re-export main components for external use
 pub use core::{Runnable, RunnableExt, RunnableSequence};
-pub use models::{ChatModel, ChatMessage, ChatMessageContent, ChatCompletion, TokenUsage, OpenAIChatModel};
+pub use models::{ChatModel, ChatMessage as ModelChatMessage, ChatMessageContent, ChatCompletion, TokenUsage, OpenAIChatModel};
 pub use tools::{Tool, Toolkit, ExampleTool, ExampleToolkit, find_matching_tool_index, parse_model_output};
-pub use memory::{BaseMemory, SimpleMemory};
+pub use memory::{BaseMemory, SimpleMemory, MessageHistoryMemory, SummaryMemory, CompositeMemory, CompositeMemoryConfig, ChatMessageRecord, ChatMessage};
 pub use agents::{Agent, McpAgent, AgentAction, AgentFinish, AgentOutput, AgentRunner, SimpleAgent, SimpleAgentRunner};
 pub use callbacks::CallbackHandler;
 pub use mcp::{McpClient, SimpleMcpClient, McpTool, McpToolAdapter, McpServer, SimpleMcpServer};
 use anyhow::Error;
 use std::collections::HashMap;
 
-// 实用函数和错误处理
+// Utility functions and error handling
 pub use core::pipe;
-// 导出anyhow错误处理库，确保第三方用户可以一致地处理错误
+// Export anyhow error handling library to ensure consistent error handling for third-party users
 pub use anyhow;
 
-// 运行Agent的主函数
+// Main function to run Agent
 pub async fn run_agent(agent: &McpAgent, input: String) -> Result<String, Error> {
     let mut inputs = HashMap::new();
     inputs.insert("input".to_string(), input);
@@ -32,16 +32,16 @@ pub async fn run_agent(agent: &McpAgent, input: String) -> Result<String, Error>
     
     match output {
         AgentOutput::Action(action) => {
-            // 查找对应的工具，使用模糊匹配机制
+            // Find the corresponding tool using fuzzy matching mechanism
             let tools = agent.tools();
             match find_matching_tool_index(&tools, &action.tool) {
                 Some(matched_name) => {
-                    // 找到匹配的工具名称后，再次查找具体的工具
+                    // After finding a matching tool name, search for the specific tool again
                     if let Some(tool) = tools.iter().find(|t| t.name() == matched_name) {
-                        // 调用工具
+                        // Invoke the tool
                         let tool_result = tool.invoke(&action.tool_input).await?;
                         
-                        // 将工具执行结果反馈给Agent进行进一步处理
+                        // Feed the tool execution result back to Agent for further processing
                         let mut new_inputs = HashMap::new();
                         new_inputs.insert("input".to_string(), format!("[CUSTOMIZE_TOOL_RESULT] {{\"tool\": \"{}\", \"result\": {}}}", matched_name, tool_result));
                         let new_output = agent.invoke(new_inputs).await?;
@@ -51,7 +51,7 @@ pub async fn run_agent(agent: &McpAgent, input: String) -> Result<String, Error>
                                 Ok(finish.return_values.get("answer").map(|s| s.clone()).unwrap_or_else(|| "".to_string()))
                             },
                             _ => {
-                                // 如果还是Action，先简单返回工具结果
+                                // If still Action, simply return the tool result for now
                                 Ok(format!("Tool {} executed successfully, result: {}", matched_name, tool_result))
                             }
                         }

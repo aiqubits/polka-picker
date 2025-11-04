@@ -49,10 +49,12 @@ async fn main() {
     if let Err(e) = mcp_client.connect(&mcp_url).await {
         error!("连接到 MCP 服务器失败: {}", e);
         return;
+    } else {
+        mcp_client.set_server_connected(true);
     }
     info!("成功连接到 MCP 服务器");
     
-    let model_name = model.model_name().map_or("未指定模型".to_string(), |v| v.to_string());
+    // let model_name = model.model_name().map_or("未指定模型".to_string(), |v| v.to_string());
     
     info!("----------------------------------------");
     

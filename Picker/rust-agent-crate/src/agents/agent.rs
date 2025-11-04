@@ -1,10 +1,10 @@
-// Agent接口和相关结构体定义
+// Agent interface and related structure definitions
 use anyhow::Error;
 use std::collections::HashMap;
 use crate::tools::{ExampleTool, Tool};
 use crate::core::Runnable;
 
-// Agent执行的动作（简化）
+// Action executed by Agent (simplified)
 #[derive(Clone, Debug)]
 pub struct AgentAction {
     pub tool: String,
@@ -13,32 +13,32 @@ pub struct AgentAction {
     pub thought: Option<String>,
 }
 
-// Agent完成执行的结果（简化）
+// Result when Agent completes execution (simplified)
 #[derive(Clone, Debug)]
 pub struct AgentFinish {
     pub return_values: HashMap<String, String>,
 }
 
-// 统一的Agent输出类型
+// Unified Agent output type
 #[derive(Clone, Debug)]
 pub enum AgentOutput {
     Action(AgentAction),
     Finish(AgentFinish),
 }
 
-// 最小化Agent接口（分离Runnable功能）
+// Minimal Agent interface (separated from Runnable functionality)
 pub trait Agent: Send + Sync {
-    // 获取可用工具列表
+    // Get list of available tools
     fn tools(&self) -> Vec<Box<dyn Tool + Send + Sync>>;
     
-    // 执行Agent动作（与README保持一致）
+    // Execute Agent action (consistent with README)
     fn execute(&self, action: &AgentAction) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send + '_>> {
         let tools = self.tools();
         let tool_name = action.tool.clone();
         let tool_input = action.tool_input.clone();
         
         Box::pin(async move {
-            // 查找对应的工具
+            // Find the corresponding tool
             for tool in tools {
                 if tool.name() == tool_name {
                     return tool.invoke(&tool_input).await;
@@ -48,17 +48,17 @@ pub trait Agent: Send + Sync {
         })
     }
     
-    // 克隆代理实例
+    // Clone agent instance
     fn clone_agent(&self) -> Box<dyn Agent>;
 }
 
-// Agent运行器 - 专门处理执行逻辑
+// Agent runner - specifically handles execution logic
 pub trait AgentRunner: Runnable<HashMap<String, String>, AgentOutput> {
-    // 注意：由于已经继承自Runnable，这里实际上不需要重复定义invoke方法
-    // 实现Runnable trait时会自动提供该方法
+    // Note: Since it inherits from Runnable, there's no need to redefine the invoke method here
+    // This method will be automatically provided when implementing the Runnable trait
 }
 
-// 简单的Agent实现
+// Simple Agent implementation
 pub struct SimpleAgent {
     tools: Vec<Box<dyn Tool + Send + Sync>>,
 }
@@ -77,13 +77,13 @@ impl SimpleAgent {
 
 impl Agent for SimpleAgent {
     fn tools(&self) -> Vec<Box<dyn Tool + Send + Sync>> {
-        // 由于Box<dyn Tool>无法直接克隆，返回空向量作为最小化实现
+        // Since Box<dyn Tool> cannot be directly cloned, return an empty vector as a minimal implementation
         Vec::new()
     }
     
     fn clone_agent(&self) -> Box<dyn Agent> {
         let mut cloned = SimpleAgent::new();
-        // 克隆所有工具
+        // Clone all tools
         for tool in &self.tools {
             let name = tool.name();
             let description = tool.description();
@@ -94,7 +94,7 @@ impl Agent for SimpleAgent {
     }
 }
 
-// 简单的AgentRunner实现
+// Simple AgentRunner implementation
 pub struct SimpleAgentRunner {
     agent: Box<dyn Agent>,
 }
@@ -112,8 +112,8 @@ impl Runnable<HashMap<String, String>, AgentOutput> for SimpleAgentRunner {
         let inputs_clone = inputs.clone();
         
         Box::pin(async move {
-            // 这里只是一个简单的实现，实际应该使用LLM来决定是调用工具还是直接返回结果
-            // 为了演示，我们假设如果输入中有"tool"字段，就调用对应的工具
+            // This is just a simple implementation, in practice should use LLM to decide whether to call a tool or directly return results
+            // For demonstration, we assume if the input contains a "tool" field, call the corresponding tool
             if let Some(tool_name) = inputs_clone.get("tool") {
                 let tool_input = inputs_clone.get("input").unwrap_or(&"input empty".to_string()).clone();
                 
@@ -124,7 +124,7 @@ impl Runnable<HashMap<String, String>, AgentOutput> for SimpleAgentRunner {
                     thought: Some("Invoking tool".to_string()),
                 }))
             } else {
-                // 否则返回一个简单的完成结果
+                // Otherwise return a simple completion result
                 let output_text = inputs_clone.get("input").unwrap_or(&"".to_string()).clone();
                 let mut return_values = HashMap::new();
                 return_values.insert("output".to_string(), format!("Finish processing input: {}", output_text));
@@ -137,23 +137,23 @@ impl Runnable<HashMap<String, String>, AgentOutput> for SimpleAgentRunner {
     }
     
     fn clone_to_owned(&self) -> Box<dyn Runnable<HashMap<String, String>, AgentOutput> + Send + Sync> {
-        // 使用新添加的clone_agent方法
+        // Use the newly added clone_agent method
         Box::new(SimpleAgentRunner { agent: self.agent.clone_agent() })
     }
 }
 
-// 为SimpleAgent实现Clone trait
+// Implement Clone trait for SimpleAgent
 impl Clone for SimpleAgent {
     fn clone(&self) -> Self {
         let mut agent = SimpleAgent::new();
-        // 由于Tool trait没有要求Clone，我们需要创建新的工具实例
-        // 对于ExampleTool，我们可以直接创建新实例
-        // 这是一个最小化实现
+        // Since Tool trait doesn't require Clone, we need to create new tool instances
+        // For ExampleTool, we can directly create new instances
+        // This is a minimal implementation
         for tool in &self.tools {
-            // 尝试获取工具名称以创建新实例
+            // Try to get tool name to create a new instance
             let name = tool.name();
             let description = tool.description();
-            // 创建一个新的ExampleTool作为克隆
+            // Create a new ExampleTool as a clone
             let new_tool = Box::new(ExampleTool::new(name.to_string(), description.to_string()));
             agent.add_tool(new_tool);
         }

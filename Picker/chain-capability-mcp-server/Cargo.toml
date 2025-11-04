@@ -7,7 +7,7 @@ edition = "2024"
 
 [dependencies]
 alloy = { version = "1.0.30", features = ["full"] }
-rust-agent = { path = "../rust-agent-crate", version = "0.0.4" }
+rust-agent = "0.0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }

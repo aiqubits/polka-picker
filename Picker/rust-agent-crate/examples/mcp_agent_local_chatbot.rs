@@ -1,5 +1,6 @@
 // 基于MCP的AI Agent聊天机器人示例
-use rust_agent::{run_agent, OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, SimpleMemory, BaseMemory};
+use std::path::PathBuf;
+use rust_agent::{run_agent, OpenAIChatModel, McpClient, SimpleMcpClient, McpTool, McpAgent, SimpleMemory, BaseMemory, CompositeMemory};
 use std::sync::Arc;
 use std::collections::HashMap;
 use chrono;
@@ -19,6 +20,22 @@ async fn main() {
         .init();
     
     info!("=== Rust Agent 使用示例 ===");
+    
+    // 获取记忆类型配置
+    let memory_type = std::env::var("MEMORY_TYPE").unwrap_or_else(|_| "composite".to_string());
+    let summary_threshold = std::env::var("SUMMARY_THRESHOLD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(200);
+    let recent_messages_count = std::env::var("RECENT_MESSAGES_COUNT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
+    
+    info!("使用记忆类型: {}", memory_type);
+    info!("摘要阈值: {}", summary_threshold);
+    info!("保留最近消息数: {}", recent_messages_count);
+    
     // 从环境变量获取API密钥和基本URL
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "OPENAI_API_KEY".to_string());
     let base_url = std::env::var("OPENAI_API_URL").ok();
@@ -92,34 +109,39 @@ async fn main() {
     
     let client_arc: Arc<dyn McpClient> = Arc::new(mcp_client);
     
-    // 创建记忆模块实例
-    let memory = SimpleMemory::new();
+    // 根据配置创建不同类型的记忆模块实例
+    let memory: Box<dyn BaseMemory> = match memory_type.as_str() {
+        "simple" => {
+            info!("使用SimpleMemory (仅内存记忆)");
+            Box::new(SimpleMemory::new())
+        },
+        "composite" => {
+            info!("使用CompositeMemory (组合记忆 - 支持中长期记忆和摘要记忆)");
+            // 使用新的简化接口，只需要提供必要的参数
+            // session_id将在内部自动生成
+            let memory = CompositeMemory::with_basic_params(
+                PathBuf::from("./data/memory"),
+                summary_threshold,
+                recent_messages_count,
+            ).await.expect("Failed to create composite memory");
+            
+            Box::new(memory)
+        },
+        _ => {
+            error!("未知的记忆类型: {}, 使用默认的SimpleMemory", memory_type);
+            Box::new(SimpleMemory::new())
+        }
+    };
 
     // 创建Agent实例，并传递temperature、max_tokens和memory参数
+    let user_system_prompt = "You are an AI assistant that can use tools to answer user questions. Please decide whether to use tools based on the user's needs.".to_string();
+    
     let mut agent = McpAgent::with_openai_model_and_memory(
         client_arc.clone(),
-        "You are an AI assistant that can use tools to answer user questions. Please decide whether to use tools based on the user's needs.".to_string(),
+        user_system_prompt,
         model.clone(),
-        Box::new(memory.clone())
+        memory
     );
-    
-    // // 手动添加本地工具
-    // let local_tools = vec![
-    //     McpTool {
-    //         name: "get_weather".to_string(),
-    //         description: "Get the weather information for a specified city. For example: 'What's the weather like in Beijing?'".to_string(),
-    //     },
-    //     McpTool {
-    //         name: "simple_calculate".to_string(),
-    //         description: "Perform simple mathematical calculations. For example: 'What is 9.11 plus 9.8?'".to_string(),
-    //     },
-    // ];
-    
-    // // 将本地工具添加到Agent
-    // for tool in local_tools {
-    //     let tool_adapter = rust_agent::McpToolAdapter::new(client_arc.clone(), tool);
-    //     agent.add_tool(Box::new(tool_adapter));
-    // }
     
     // 尝试从MCP服务器自动获取工具并添加到Agent
     if let Err(e) = agent.auto_add_tools().await {
@@ -127,6 +149,11 @@ async fn main() {
     }
     
     println!("基于MCP的AI Agent聊天机器人已启动！");
+    println!("记忆类型: {}", memory_type);
+    if memory_type == "composite" {
+        println!("摘要功能: 已启用 (阈值: {} 条消息)", summary_threshold);
+        println!("中长期记忆: 已启用");
+    }
     println!("输入'退出'结束对话");
     println!("----------------------------------------");
     println!("Using tools example:");
@@ -195,23 +222,41 @@ async fn main() {
     
     // 打印对话历史
     info!("对话历史:");
-    match memory.load_memory_variables(&HashMap::new()).await {
-        Ok(memories) => {
-            if let Some(chat_history) = memories.get("chat_history") {
-                if let serde_json::Value::Array(messages) = chat_history {
-                    for (i, message) in messages.iter().enumerate() {
-                        if let serde_json::Value::Object(msg) = message {
-                            let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("unknown");
-                            let content = msg.get("content").and_then(|v| v.as_str()).unwrap_or("");
-                            info!("{}. {}: {}", i + 1, role, content);
+    if let Some(memory) = agent.get_memory() {
+        match memory.load_memory_variables(&HashMap::new()).await {
+            Ok(memories) => {
+                if let Some(chat_history) = memories.get("chat_history") {
+                    if let serde_json::Value::Array(messages) = chat_history {
+                        info!("总消息数: {}", messages.len());
+                        for (i, message) in messages.iter().enumerate() {
+                            if let serde_json::Value::Object(msg) = message {
+                                let role = msg.get("role").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                let content = msg.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                                // 限制内容长度以便显示
+                                let display_content = if content.len() > 100 {
+                                    format!("{}...", &content[..100])
+                                } else {
+                                    content.to_string()
+                                };
+                                info!("{}. {}: {}", i + 1, role, display_content);
+                            }
                         }
                     }
                 }
+                
+                // 如果有摘要，也打印出来
+                if let Some(summary) = memories.get("summary") {
+                    if let serde_json::Value::String(summary_text) = summary {
+                        info!("对话摘要: {}", summary_text);
+                    }
+                }
+            },
+            Err(e) => {
+                info!("Failed to load memory variables: {}", e);
             }
-        },
-        Err(e) => {
-            info!("Failed to load memory variables: {}", e);
         }
+    } else {
+        info!("No memory available");
     }
     
     // 断开MCP连接

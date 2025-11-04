@@ -42,7 +42,7 @@ sysinfo = "0.30"
 zip = "5.1.1"
 lazy_static = "1.5.0"
 notify = "8.2.0"
-rust-agent = { path = "../../rust-agent-crate" }
+rust-agent = "0.0.4"
 
 # Windows特定依赖，用于在所有平台上编译Windows特定代码
 [target.'cfg(windows)'.dependencies]
