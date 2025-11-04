@@ -239,7 +239,7 @@ pub struct AppConfig {
 
 ### 1. 环境变量
 可以通过设置环境变量来覆盖默认配置：
-- `API_BASE_URL`：API 服务器地址，默认为 "http://127.0.0.1:3000"
+- `API_BASE_URL`：API 服务器地址，默认为 "https://picker-api.openpick.org"
 - `REQUEST_TIMEOUT_MS`：请求超时时间（毫秒），默认为 30000
 - `MAX_RETRIES`：最大重试次数，默认为 3
 

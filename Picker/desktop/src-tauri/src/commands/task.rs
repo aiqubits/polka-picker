@@ -544,6 +544,7 @@ impl TaskConfig {
 }
 
 // 增加路径安全检查
+#[allow(dead_code)]
 fn safe_path(path: &Path, base_dir: &Path) -> Result<PathBuf, String> {
     // 获取绝对路径，捕获更详细的错误
     let absolute_path = fs::canonicalize(path)
@@ -739,7 +740,7 @@ impl TaskManager {
         if !file_path.exists() {
             return Err(format!("Entry file for task '{}' does not exist", task_id));
         }
-                // 定义一个在Windows平台上配置命令的函数，使用CREATE_NO_WINDOW标志避免显示控制台窗口
+        // 定义一个在Windows平台上配置命令的函数，使用CREATE_NO_WINDOW标志避免显示控制台窗口
         #[cfg(target_os = "windows")]
         fn configure_windows_command(command: &mut Command) {
             command.creation_flags(0x08000000); // CREATE_NO_WINDOW 标志，避免显示控制台窗口
@@ -749,10 +750,33 @@ impl TaskManager {
         let mut child = if cfg!(target_os = "windows") {
             if let Some(ext) = file_path.extension().and_then(OsStr::to_str) {
                 match ext.to_lowercase().as_str() {
-                    "exe" | "ps1" => {
+                    "exe" => {
                         #[cfg(target_os = "windows")]
                         {
                             let mut command = Command::new(file_path);
+                            configure_windows_command(&mut command);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            let mut command = Command::new(file_path);
+                            command
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .map_err(|e| e.to_string())?
+                        }
+                    },
+                    "ps1" => {
+                        #[cfg(target_os = "windows")]
+                        {
+                            let mut command = Command::new("powershell");
+                            command.arg("-ExecutionPolicy").arg("Bypass");
+                            command.arg("-File").arg(file_path);
                             configure_windows_command(&mut command);
                             command
                                 .stdout(Stdio::piped())

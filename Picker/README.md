@@ -68,7 +68,7 @@ https://github.com/conflux-fans/summerhackfest-2025/tree/main/projects/picker
 - 2025-10-23: Redefine the data types of custom contracts on-chain, and solidity contract tests, nodejs contract tests.
 - 2025-10-24: Add api settings for Desktop Chatbot blockchain and other related optimizations.
 - 2025-10-26: Complete the deployment and code verification of smart contract testing integration for the Polka passet-hub testnet.
-
+- 2025-11-04: Impl rust-agent rust-agent medium to long-term memory, summary memory, automatic context size, session isolation For Picker.
 
 ### Smart Contract  
 
@@ -92,22 +92,13 @@ https://blockscout-passet-hub.parity-testnet.parity.io/address/0xc7a5983345b8577
 
 赛道一：构建下一代 Web3 生态系统
 
-赛道二：Bifrost 流动性质押创新体验挑战
-
 ** mandatory before offline demo, submit aterial for Demo
-1. Demo Video [link to Youtube]
-2. PPT [link to google doc]
+1. Demo Video [https://youtu.be/l4-1wZfUMn8?si=nvCj9J9tYDu9lNf7]
 
-Demo Video:
+<iframe width="80%" height="80%" src="https://www.youtube.com/embed/l4-1wZfUMn8?si=nvCj9J9tYDu9lNf7" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
-<video width="100%" controls>
-    <source src="https://cloud.video.taobao.com/vod/bYJ5mh2IQVxu08COFi5NzXXGl0Q-iJqXVagCaeyfFa8.mp4" type="video/mp4">
-    您的浏览器不支持HTML5视频标签
-</video>
 
-[Picker Demo Video](https://cloud.video.taobao.com/vod/bYJ5mh2IQVxu08COFi5NzXXGl0Q-iJqXVagCaeyfFa8.mp4)
-
-PPT: 
+2. PPT [https://docs.google.com/presentation/d/1nKx2tJnDaQaKQiv4cXQ41uHVIB0YhGQT/edit?usp=sharing&ouid=105649966062078281366&rtpof=true&sd=true] 
 
 https://picker-polka-ppt.vercel.app/1
 

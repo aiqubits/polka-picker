@@ -243,7 +243,7 @@ fn parse_and_calculate(expression: &str) -> Result<f64, Error> {
 // 初始化MCP客户端
 async fn init_mcp_client(app_handle: AppHandle) -> Result<Arc<dyn McpClient>, Error> {
     // 从环境变量获取配置
-    let mcp_url = std::env::var("MCP_URL").unwrap_or("http://127.0.0.1:6000".to_string());
+    let mcp_url = std::env::var("MCP_URL").unwrap_or("https://picker-api.openpick.org".to_string());
     
     // 初始化MCP客户端
     let mut mcp_client = SimpleMcpClient::new(mcp_url.clone());

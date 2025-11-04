@@ -23,7 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.8.4", features = [ "devtools", "config-json5"] }
 tauri-plugin-log = "2"
-reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"] }
+reqwest = { version = "0.12", features = ["json", "native-tls", "multipart"] }
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["rt-multi-thread", "io-util", "process"] }
 tauri-plugin-store = "2"
@@ -42,7 +42,7 @@ sysinfo = "0.30"
 zip = "5.1.1"
 lazy_static = "1.5.0"
 notify = "8.2.0"
-rust-agent = "0.0.4"
+rust-agent = "0.0.5"
 
 # Windows特定依赖，用于在所有平台上编译Windows特定代码
 [target.'cfg(windows)'.dependencies]

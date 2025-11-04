@@ -6387,18 +6387,22 @@ checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
 name = "rust-agent"
-version = "0.0.4"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35d4a991e27fb61f0e562ae346f13e3e3d16a1d4f3cc884872847e954a6a00e4"
 dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
  "chrono",
+ "config",
  "env_logger",
  "futures",
  "log",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tower-http 0.5.2",

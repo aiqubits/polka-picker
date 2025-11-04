@@ -99,7 +99,7 @@ license = "MIT"
 [task]                                                      # optional
 id = "b7e3a5d1-2c4f-41a7-b9d5-6a3c2b8d1e4f"
 name = "Picker Node.js task"
-status = "idle"
+status = "Idle"
 installed = "240128"
 runs = 128
 last_run = "240301"

@@ -47,8 +47,17 @@ pub fn run() {
       app.manage(auth_store.clone());
       
       // 创建并管理 AuthManager 实例
-      let auth_manager = AuthManager::new(auth_store);
-      app.manage(auth_manager);
+      #[cfg(not(test))]
+      {
+          let auth_manager = AuthManager::new(auth_store);
+          app.manage(auth_manager);
+      }
+      
+      #[cfg(test)]
+      {
+          let auth_manager = AuthManager::new("test");
+          app.manage(auth_manager);
+      }
       
       // 创建并管理 ChatbotState 实例
       let chatbot_state = Arc::new(Mutex::new(ChatbotState::default()));
